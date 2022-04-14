@@ -1,3 +1,4 @@
+# %% [code]
 import os
 import random
 import gc
@@ -15,7 +16,7 @@ import lightgbm as lgb
 import xgboost as xgb
 import catboost as cb
 
-
+# %% [code]
 # Copy from https://www.kaggle.com/gemartin/load-data-reduce-memory-usage by @gemartin
 # Modified to support timestamp type
 # Modified to add option to use float16 or not. feather format does not support float16.
@@ -72,7 +73,7 @@ def import_data(file):
 
 
 # Read data...
-root = '/home/joydipb/gdrive/Colab Notebooks'
+root = '/home/joydipb/Documents/CMT307-Coursework-2-Group-19'
 
 train_df = pd.read_csv(os.path.join(root, 'train.csv'))
 weather_train_df = pd.read_csv(os.path.join(root, 'weather_train.csv'))
@@ -114,3 +115,5 @@ weather_test_df = pd.read_feather('weather_test.feather')
 building_meta_df = pd.read_feather('building_metadata.feather')
 sample_submission = pd.read_feather('sample_submission.feather')
 
+
+# %%

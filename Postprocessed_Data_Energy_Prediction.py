@@ -60,7 +60,7 @@ from sklearn.metrics import mean_squared_error
 
 #%% [code]
 
-os.listdir('/Users/joydipb/Google Drive/Colab Notebooks/ashrae-energy-prediction-project')
+os.listdir('/home/joydipb/Documents/CMT307-Coursework-2-Group-19')
 
 #%% [code]
 # Original code from https://www.kaggle.com/gemartin/load-data-reduce-memory-usage by @gemartin
@@ -120,12 +120,12 @@ def set_local(df):
         df.loc[sids, 'timestamp'] = df[sids].timestamp - pd.offsets.Hour(zone)
 
 #%%[code]
-#!ls '/home/joydipb/gdrive/Colab Notebooks/ashrae-energy-prediction-project'
+!ls '/home/joydipb/Documents/CMT307-Coursework-2-Group-19'
 
 
 #%% [code]
 
-root = Path('/Users/joydipb/Google Drive/Colab Notebooks/ashrae-energy-prediction-project')
+root = Path('/home/joydipb/Documents/CMT307-Coursework-2-Group-19')
 #root_black = Path('../input/ashrae-local-datatime-and-black-count')
 train_df = pd.read_feather(root/'train.feather')
 #train_df_black = pd.read_feather(root_black/'train_black.feather')
@@ -689,7 +689,7 @@ preprocess(test_df)
 #test_df['building_median'] = test_df['building_id'].map(building_median)
 
 print('preprocessing weather...')
-weather_test_df = weather_test_df.groupby('site_id').apply(lambda group: group.interpolate(limit_direction='both'))
+weather_test_df = weather_test_df.groupby('site_id').apply(lambda group: group.interpolate(method ='ffill', limit_direction ='forward'))
 weather_test_df.groupby('site_id').apply(lambda group: group.isna().sum())
 
 add_sg(weather_test_df)
@@ -708,6 +708,8 @@ weather_test_df = reduce_mem_usage(weather_test_df, use_float16=True)
 
 gc.collect()
 print (test_df.shape)
+
+
 
 # %% [code]
 sample_submission = pd.read_feather(os.path.join(root, 'sample_submission.feather'))
@@ -774,8 +776,49 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
     del X_test, y_test
     gc.collect()
 
+# %% [markdown]
+# site-0 correction 
+
 # %% [code]
 
+# https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
+sample_submission.loc[(test_df.building_id.isin(site_0_bids)) & (test_df.meter==0), 'meter_reading'] = sample_submission[(test_df.building_id.isin(site_0_bids)) & (test_df.meter==0)]['meter_reading'] * 3.4118
 
 
 
+
+# %% [code]
+if rescale:   
+    sample_submission.loc[(test_df.building_id == 778) & (test_df.meter == 1), 'meter_reading'] = 100 * sample_submission.loc[(test_df.building_id == 778) & (test_df.meter == 1), 'meter_reading']
+    sample_submission.loc[(test_df.building_id == 1021) & (test_df.meter == 3), 'meter_reading'] = 1000 * sample_submission.loc[(test_df.building_id == 1021) & (test_df.meter == 3), 'meter_reading']
+    
+    plt.figure()
+    plt.subplot(211)
+    sample_submission.loc[(test_df.building_id == 778) & (test_df.meter == 1), 'meter_reading'].plot()
+    plt.subplot(212)    
+    sample_submission.loc[(test_df.building_id == 1021) & (test_df.meter == 3), 'meter_reading'].plot()
+
+# %% [code]
+if clip0:
+    sample_submission.loc[sample_submission.meter_reading < 0, 'meter_reading'] = 0
+
+
+# %% [code]
+sample_submission.head()
+
+# %% [code]
+sample_submission.tail()
+# %% [code]
+if not debug:
+    sample_submission.to_csv('submission.csv', index=False, float_format='%.4f')
+
+# %% [code]
+np.log1p(sample_submission['meter_reading']).hist(bins=100)
+# %%
+# %%[code]
+## Export the test and train data frame
+
+train_df.to_csv('train_processed.csv', index=False)
+test_df.to_csv('test_processed.csv',index=False)
+
+# %%
