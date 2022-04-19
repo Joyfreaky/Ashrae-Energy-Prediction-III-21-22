@@ -126,11 +126,8 @@ def set_local(df):
 #%% [code]
 
 root = Path('/home/joydipb/Documents/CMT307-Coursework-2-Group-19')
-#root_black = Path('../input/ashrae-local-datatime-and-black-count')
 train_df = pd.read_feather(root/'train.feather')
-#train_df_black = pd.read_feather(root_black/'train_black.feather')
 weather_train_df = pd.read_feather(root/'weather_train.feather')
-#weather_test_df = pd.read_feather(root/'weather_test.feather')
 building_meta_df = pd.read_feather(root/'building_metadata.feather')
 
 building_meta_df = building_meta_df.merge(train_df[['building_id','meter']].drop_duplicates(), on='building_id')
@@ -214,10 +211,6 @@ for bid in train_df_black.building_id.unique():
 # %% [code]
 train_df_black[train_df_black.building_id == 954].black_count.plot()
 
-# %% [code]
-print('Shape of Train Data:',train_df.shape)
-print('Shape of Building Data:', building_meta_df.shape)
-print('Shape of Weather Train Data:', weather_train_df.shape)
 
 # %% [code]
 train_df = train_df.merge(train_df_black[['timestamp','building_id','meter','black_count']], on=['timestamp','building_id','meter'])
@@ -308,13 +301,13 @@ for bid in funny_bids:
 # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
 site_0_bids = building_meta_df[building_meta_df.site_id == 0].building_id.unique()
 print (len(site_0_bids), len(train_df[train_df.building_id.isin(site_0_bids)].building_id.unique()))
-train_df[train_df.building_id.isin(site_0_bids)].head()
+train_df[train_df.building_id.isin(site_0_bids) & (train_df.meter==0)].head(50)
 
 # %% [code]
 train_df.loc[(train_df.building_id.isin(site_0_bids)) & (train_df.meter==0), 'meter_reading'] = train_df[(train_df.building_id.isin(site_0_bids)) & (train_df.meter==0) ]['meter_reading'] * 0.2931
 
 # %% [code]
-train_df[train_df.building_id.isin(site_0_bids)].head()
+train_df[(train_df.building_id.isin(site_0_bids)) & (train_df.meter==0)].head(50)
 
 # %% [code]
 ## Data preprocessing
@@ -457,6 +450,7 @@ weather_train_df = reduce_mem_usage(weather_train_df, use_float16=True)
 # %% [code]
 building_meta_df.head()
 
+# %% [code]
 print('Shape of Train Data:',train_df.shape)
 print('Shape of Building Data:', building_meta_df.shape)
 print('Shape of Weather Train Data:', weather_train_df.shape)
@@ -558,7 +552,7 @@ def create_X_y(train_df, groupNum_train):
     
     target_train_df = train_df[train_df['groupNum_train'] == groupNum_train].copy()        
     # target_train_df = target_train_df.merge(df_groupNum_median, on=['timestamp'], how='left')
-    target_train_df['group_median_'+str(groupNum_train)] = np.nan
+    # target_train_df['group_median_'+str(groupNum_train)] = np.nan
     
     X_train = target_train_df[feature_cols + category_cols]
     y_train = target_train_df['meter_reading_log1p'].values
@@ -642,10 +636,13 @@ def plot_feature_importance(model):
     importance_df.plot.barh(ax=ax)
     fig.show()
 
-
-
 # %% [code]
 
+## Exporting Train Data to use in other models
+train_df.to_feather('train_df_processed.feather')
+
+# %% [code]
+## Traning the Light GBM Model
 gc.collect()
 
 for groupNum_train in building_meta_df['groupNum_train'].unique():
@@ -753,7 +750,7 @@ def create_X(test_df, groupNum_train):
     # target_test_df = target_test_df.merge(df_groupNum_median, on=['timestamp'], how='left')
     target_test_df = target_test_df.merge(building_meta_df, on=['building_id','meter','groupNum_train'], how='left')
     target_test_df = target_test_df.merge(weather_test_df, on=['site_id', 'timestamp'], how='left')
-    target_test_df['group_median_'+str(groupNum_train)] = np.nan
+    # target_test_df['group_median_'+str(groupNum_train)] = np.nan
 
     X_test = target_test_df[feature_cols + category_cols]
     
@@ -804,6 +801,13 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
     del X_test, y_test
     gc.collect()
 
+# %% [code]
+# Exporting Test data, building metadata, and weather data after preprocessing 
+# To be used in other models.
+test_df.to_feather('test_df_processed.feather')
+weather_test_df.to_feather('weather_test_df_processed.feather')
+building_meta_df.to_feather('building_meta_df_processed.feather')
+
 # %% [markdown]
 ### site-0 correction 
 
@@ -846,11 +850,4 @@ if not debug:
 
 # %% [code]
 np.log1p(sample_submission['meter_reading']).hist(bins=100)
-# %%
-# %%[code]
-## Export the processed data frame
-
-train_df.to_csv('train_df_processed.csv')
-test_df.to_csv('test_df_processed.csv')
-
 # %%

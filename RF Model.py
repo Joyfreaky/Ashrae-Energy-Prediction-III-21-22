@@ -1,3 +1,4 @@
+# %%[markdown]
 # -*- coding: utf-8 -*-
 """
 Created on Fri Apr 15 20:49:23 2022
@@ -5,30 +6,53 @@ Created on Fri Apr 15 20:49:23 2022
 @author: Ed
 Random Forest
 """
+# %% [code]
 # Basic imports
 import numpy as np 
 import pandas as pd 
 
-
+# %% [code]
 # Reading in processed data
-train_data = pd.read_csv("train_processed.csv")[:50000]
-test_data = pd.read_csv("test_processed.csv")[:100000]
-
-# Dropping unnecessary columns
-# Timestamp, weekend and date will already be processed in the hour, day, month columns
-test_data.drop("timestamp", inplace=True, axis = 1)
-test_data.drop("weekend", inplace=True, axis = 1)
-test_data.drop("date", inplace=True, axis = 1)
-# Row ID is just the index
-test_data.drop("row_id", inplace=True, axis = 1)
+train_df = pd.read_feather("train_df_processed.feather")
+test_df = pd.read_feather("test_df_processed.feather")
+weather_test_df = pd.read_feather("weather_test_df_processed.feather")
+building_meta_df = pd.read_feather("building_meta_df_processed.feather")
 
 
+
+# %% [code]
+# # Dropping unnecessary columns
+# # Timestamp, weekend and date will already be processed in the hour, day, month columns
+# test_data.drop("timestamp", inplace=True, axis = 1)
+# test_data.drop("weekend", inplace=True, axis = 1)
+# test_data.drop("date", inplace=True, axis = 1)
+# # Row ID is just the index
+# test_data.drop("row_id", inplace=True, axis = 1)
+
+print('Shape of the Train data after processing',train_df.shape)
+print('Shape of the Test data after processing',test_df.shape)
+print('Shape of the weather test data after processing',weather_test_df.shape)
+print('Shape of the building metadata after processing',building_meta_df.shape)
+
+# %%[code]
 # Reducing memory usage func
-def reduce_mem_usage(df):
 
+# Modified to support timestamp type, categorical type
+# Modified to add option to use float16 or not. feather format does not support float16.
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas.api.types import is_categorical_dtype
+
+def reduce_mem_usage(df):
+    """ iterate through all the columns of a dataframe and modify the data type
+        to reduce memory usage.        
+    """
+    start_mem = df.memory_usage().sum() / 1024**2
+    print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
     
     for col in df.columns:
-
+        if is_datetime(df[col]) or is_categorical_dtype(df[col]):
+            # skip datetime type or categorical type
+            continue
         col_type = df[col].dtype
 
         if col_type != object:
@@ -53,12 +77,20 @@ def reduce_mem_usage(df):
         else:
             df[col] = df[col].astype('category')
 
+    end_mem = df.memory_usage().sum() / 1024**2
+    print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
+    print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
 
     return df
+# %%[code]
+
 # Implementing memory reduction func
-train_data = reduce_mem_usage(train_data)
+train_df = reduce_mem_usage(train_df)
+test_df = reduce_mem_usage(test_df)
+weather_test_df = reduce_mem_usage(weather_test_df)
+building_meta_df = reduce_mem_usage(building_meta_df)
 
-
+# %%[code]
 # Imports for encoding data before model
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler

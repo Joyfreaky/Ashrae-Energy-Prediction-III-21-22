@@ -108,12 +108,16 @@ weather_test_df.to_feather('weather_test.feather')
 building_meta_df.to_feather('building_metadata.feather')
 sample_submission.to_feather('sample_submission.feather')
 
-train_df = pd.read_feather('train.feather')
-weather_train_df = pd.read_feather('weather_train.feather')
-test_df = pd.read_feather('test.feather')
-weather_test_df = pd.read_feather('weather_test.feather')
-building_meta_df = pd.read_feather('building_metadata.feather')
-sample_submission = pd.read_feather('sample_submission.feather')
+# train_df = pd.read_feather('train.feather')
+# weather_train_df = pd.read_feather('weather_train.feather')
+# test_df = pd.read_feather('test.feather')
+# weather_test_df = pd.read_feather('weather_test.feather')
+# building_meta_df = pd.read_feather('building_metadata.feather')
+# sample_submission = pd.read_feather('sample_submission.feather')
 
+
+# %% [code]
+
+gc.collect()
 
 # %%
