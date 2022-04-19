@@ -7,104 +7,318 @@ Original file is located at
     https://colab.research.google.com/drive/1tpV30gu9xLNAFd50wK2omaUoGMz1-BzO
 """
 
+#%% [code]
+# v2: 1.102507841834652
+# v9 : del area_floor
+# 10: remove 1099
+# 11: dayweek
+# 12 : del bil_median
+# 13 : leak data update
+# 14 : site-0 unit correction
+# sg filter
+
+#v3 : add diff2 (bug)
+#v4 : add diff2
+#v5 : black 10
+black_day = 10
+outlier = False
+rescale = False
+
+debug=False
+num_rounds = 200
+
+clip0=False # minus meter confirmed in test(site0 leak data)
+
+folds = 3 # 3, 6, 12
+# 6: 1.1069822104487446
+# 3: 1.102507841834652
+# 12: 1.1074824417420517
+
+use_ucf=False
+ucf_clip=False
+
+ucf_year = [2017, 2018] # ucf data year used in train 
+
+predmode='all' # 'valid', train', 'all'
+# %% [code]
 # Imports
+from sklearn.metrics import r2_score
+from keras.layers import LSTM
+from keras.layers import Dense
+from keras.models import Sequential
+from pandas import concat
+import gc
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from matplotlib import pyplot as plt
-import datetime
-import time
-import requests
-import io
 import numpy as np
-
+from tqdm import tqdm_notebook as tqdm
 # Get data from drive
-from google.colab import drive
-drive.mount('/content/drive', force_remount = True)
-df_train = pd.read_csv('/content/drive/My Drive/train.csv')
-df_test = pd.read_csv('/content/drive/My Drive/test.csv')
+# from google.colab import drive
+# drive.mount('/content/drive', force_remount = True)
+basePath = "/home/joydipb/Documents/CMT307-Coursework-2-Group-19"
+train_df = pd.read_feather(basePath + '/train_df_processed.feather')
+test_df = pd.read_feather(basePath + '/test_df_processed.feather')
+weather_test_df = pd.read_feather(
+    basePath + '/weather_test_df_processed.feather')
+building_meta_df = pd.read_feather(
+    basePath + '/building_meta_df_processed.feather')
 
+# %% [code]
+# Feature Selection
+category_cols = ['building_id', 'site_id', 'primary_use',
+                 'IsHoliday', 'groupNum_train']  # , 'meter'
+feature_cols = ['square_feet', 'year_built'] + [
+    'hour', 'weekend',
+    #    'day', # 'month' ,
+    #    'dayofweek',
+    #    'building_median'
+] + [
+    'air_temperature', 'cloud_coverage',
+    'dew_temperature', 'precip_depth_1_hr',
+    'sea_level_pressure',
+    #'wind_direction', 'wind_speed',
+    'air_temperature_mean_lag72',
+    'air_temperature_max_lag72', 'air_temperature_min_lag72',
+    'air_temperature_std_lag72', 'cloud_coverage_mean_lag72',
+    'dew_temperature_mean_lag72', 'precip_depth_1_hr_mean_lag72',
+    'sea_level_pressure_mean_lag72',
+    # 'wind_direction_mean_lag72',
+    'wind_speed_mean_lag72',
+    'air_temperature_mean_lag3',
+    'air_temperature_max_lag3',
+    'air_temperature_min_lag3', 'cloud_coverage_mean_lag3',
+    'dew_temperature_mean_lag3',
+    'precip_depth_1_hr_mean_lag3',
+    'sea_level_pressure_mean_lag3',
+    #    'wind_direction_mean_lag3', 'wind_speed_mean_lag3',
+    #    'floor_area',
+    'year_cnt', 'bid_cnt',
+    'dew_smooth', 'air_smooth',
+    'dew_diff', 'air_diff',
+    'dew_diff2', 'air_diff2'
+]
+# %% [code]
+
+def create_X(test_df, groupNum_train):
+    
+    target_test_df = test_df[test_df['groupNum_train'] == groupNum_train].copy()        
+    # target_test_df = target_test_df.merge(df_groupNum_median, on=['timestamp'], how='left')
+    target_test_df = target_test_df.merge(building_meta_df, on=['building_id','meter','groupNum_train'], how='left')
+    target_test_df = target_test_df.merge(weather_test_df, on=['site_id', 'timestamp'], how='left')
+    # target_test_df['group_median_'+str(groupNum_train)] = np.nan
+
+    X_test = target_test_df[feature_cols + category_cols]
+    
+    return X_test
+
+
+
+# %% [code]
 # Keep useful columns
-try:
-  df_train = df_train.drop('timestamp', axis = 1)
-  df_test = df_test.drop('timestamp', axis = 1)
 
-  # EXPERIMENTAL - DROPPING METER
-  df_train = df_train.drop('meter', axis = 1)
-except:
-  pass
 
-df_train.isna().sum()
+# try:
+#   df_train = df_train.drop('timestamp', axis = 1)
+#   df_test = df_test.drop('timestamp', axis = 1)
 
-df_train
+#   # EXPERIMENTAL - DROPPING METER
+#   df_train = df_train.drop('meter', axis = 1)
+# except:
+#   pass
 
-def clean_dataset(df):
-    assert isinstance(df, pd.DataFrame), "df needs to be a pd.DataFrame"
-    df.dropna(inplace=True)
-    indices_to_keep = ~df.isin([np.nan, np.inf, -np.inf]).any(1)
-    return df[indices_to_keep].astype(np.float64)
+# df_train.isna().sum()
 
-df_train = clean_dataset(df_train)
+# df_train
+
+# def clean_dataset(df):
+#     assert isinstance(df, pd.DataFrame), "df needs to be a pd.DataFrame"
+#     df.dropna(inplace=True)
+#     indices_to_keep = ~df.isin([np.nan, np.inf, -np.inf]).any(1)
+#     return df[indices_to_keep].astype(np.float64)
+
+# df_train = clean_dataset(df_train)
 
 # Split data
-ratio = round(0.8 * df_train.shape[0])
-train_values = df_train.iloc[:ratio, :]
-test_values = df_train.iloc[ratio:, :]
-print('training data size: ', train_values.shape, '\n    test data size: ', test_values.shape)
+# ratio = round(0.8 * df_train.shape[0])
+# train_values = df_train.iloc[:ratio, :]
+# test_values = df_train.iloc[ratio:, :]
+# print('training data size: ', train_values.shape,
+#       '\n    test data size: ', test_values.shape)
 
-# Reduce memory usage
-try:
-  train_values = train_values.apply(float.half)
-except:
-  pass
+# # Reduce memory usage
+# try:
+#     train_values = train_values.apply(float.half)
+# except:
+#     pass
+#%% [code]
+
+def pred_all(X_test, models, batch_size=1000000):
+    iterations = (X_test.shape[0] + batch_size -1) // batch_size
+    print('iterations', iterations)
+
+    y_test_pred_total = np.zeros(X_test.shape[0])
+    for i, (mindex, model) in enumerate(models):
+        print(f'predicting {i}-th model')
+        for k in tqdm(range(iterations)):
+            y_pred_test = model.predict(X_test[k*batch_size:(k+1)*batch_size], num_iteration=model.best_iteration)
+            y_test_pred_total[k*batch_size:(k+1)*batch_size] += y_pred_test
+
+    y_test_pred_total /= len(models)
+    return y_test_pred_total
 
 
-train_values
+def pred(X_test, models, batch_size=1000000):
+    if predmode == 'valid':
+        print ('valid pred')
+        return pred_valid(X_test, models, batch_size=1000000)
+    elif predmode == 'train':
+        print ('train pred')
+        return pred_train(X_test, models, batch_size=1000000)
+    else:
+        print ('all pred')
+        return pred_all(X_test, models, batch_size=1000000)
 
-from pandas import concat
-
-# convert series to supervised learning by Jason Brownlee 
-def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
-	"""
-	Frame a time series as a supervised learning dataset.
-	Arguments:
-		data: Sequence of observations as a list or NumPy array.
-		n_in: Number of lag observations as input (X).
-		n_out: Number of observations as output (y).
-		dropnan: Boolean whether or not to drop rows with NaN values.
-	Returns:
-		Pandas DataFrame of series framed for supervised learning.
-	"""
+#%% [code]
+def create_X_y(train_df, groupNum_train):
     
-	n_vars = 1 if type(data) is list else data.shape[1]
-	df = pd.DataFrame(data)
-	cols, names = list(), list()
-	# input sequence (t-n, ... t-1)
-	for i in range(n_in, 0, -1):
-		cols.append(df.shift(i))
-		names += [('var%d(t-%d)' % (j+1, i)) for j in range(n_vars)]
-	# forecast sequence (t, t+1, ... t+n)
-	for i in range(0, n_out):
-		cols.append(df.shift(-i))
-		if i == 0:
-			names += [('var%d(t)' % (j+1)) for j in range(n_vars)]
-		else:
-			names += [('var%d(t+%d)' % (j+1, i)) for j in range(n_vars)]
-	# put it all together
-	agg = concat(cols, axis=1)
-	agg.columns = names
-	# drop rows with NaN values
-	if dropnan:
-		agg.dropna(inplace=True)
-	return agg
+    target_train_df = train_df[train_df['groupNum_train'] == groupNum_train].copy()        
+    # target_train_df = target_train_df.merge(df_groupNum_median, on=['timestamp'], how='left')
+    # target_train_df['group_median_'+str(groupNum_train)] = np.nan
+    
+    X_train = target_train_df[feature_cols + category_cols]
+    y_train = target_train_df['meter_reading_log1p'].values
+    
+    del target_train_df
+    return X_train, y_train
+
+# %% [code]
+from sklearn.model_selection import GroupKFold, StratifiedKFold
+
+seed = 666
+shuffle = False
+#kf = KFold(n_splits=folds, shuffle=shuffle, random_state=seed)
+#kf = GroupKFold(n_splits=folds)
+kf = StratifiedKFold(n_splits=folds)
+
+
+
+# %% [code]
+## Traning the Light GBM Model
+gc.collect()
+
+for groupNum_train in building_meta_df['groupNum_train'].unique():
+    X_train, y_train = create_X_y(train_df, groupNum_train=groupNum_train)
+    y_valid_pred_total = np.zeros(X_train.shape[0])
+    gc.collect()
+    print('groupNum_train', groupNum_train, X_train.shape)
+
+    cat_features = [X_train.columns.get_loc(cat_col) for cat_col in category_cols]
+    print('cat_features', cat_features)
+
+    exec('models' +str(groupNum_train)+ '=[]')
+
+    train_df_site = train_df[train_df['groupNum_train']==groupNum_train].copy()
+    
+    #for train_idx, valid_idx in kf.split(X_train, y_train):
+    #for train_idx, valid_idx in kf.split(X_train, y_train, groups=get_groups(train_df, groupNum_train)):    
+    for train_idx, valid_idx in kf.split(train_df_site, train_df_site['building_id']):
+        train_data = X_train.iloc[train_idx,:], y_train[train_idx]
+        valid_data = X_train.iloc[valid_idx,:], y_train[valid_idx]
+
+        mindex = train_df_site.iloc[valid_idx,:].month.unique()
+        print (mindex)
+
+        print('train', len(train_idx), 'valid', len(valid_idx))
+    #     model, y_pred_valid, log = fit_cb(train_data, valid_data, cat_features=cat_features, devices=[0,])
+        model, y_pred_valid, log = fit_lgbm(train_data, valid_data, cat_features=category_cols,
+                                            num_rounds=num_rounds, lr=0.05, bf=0.7)
+        y_valid_pred_total[valid_idx] = y_pred_valid
+        exec('models' +str(groupNum_train)+ '.append([mindex, model])')        
+        gc.collect()
+        if debug:
+            break
+
+    try:
+        sns.distplot(y_train)
+        sns.distplot(y_valid_pred_total)
+        plt.show()
+    except:
+        pass
+
+    del X_train, y_train
+    gc.collect()
+    
+    print('-------------------------------------------------------------')
+
+#%% [code]
+
+## Prediction on Test Dataset
+for groupNum_train in building_meta_df['groupNum_train'].unique():
+    print('groupNum_train: ', groupNum_train)
+    X_test = create_X(test_df, groupNum_train=groupNum_train)
+    gc.collect()
+
+    exec('y_test= pred(X_test, models' +str(groupNum_train)+ ')')
+
+    sns.distplot(y_test)
+    plt.show()
+
+    print(X_test.shape, y_test.shape)
+    sample_submission.loc[test_df["groupNum_train"] == groupNum_train,"meter_reading"] = np.expm1(y_test)
+    
+    del X_test, y_test
+    gc.collect()
+
+
+# train_values
+
+#%%
+# convert series to supervised learning by Jason Brownlee
+
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+    """
+    Frame a time series as a supervised learning dataset.
+    Arguments:
+            data: Sequence of observations as a list or NumPy array.
+            n_in: Number of lag observations as input (X).
+            n_out: Number of observations as output (y).
+            dropnan: Boolean whether or not to drop rows with NaN values.
+    Returns:
+            Pandas DataFrame of series framed for supervised learning.
+    """
+
+    n_vars = 1 if type(data) is list else data.shape[1]
+    df = pd.DataFrame(data)
+    cols, names = list(), list()
+    # input sequence (t-n, ... t-1)
+    for i in range(n_in, 0, -1):
+        cols.append(df.shift(i))
+        names += [('var%d(t-%d)' % (j+1, i)) for j in range(n_vars)]
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, n_out):
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j+1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j+1, i)) for j in range(n_vars)]
+    # put it all together
+    agg = concat(cols, axis=1)
+    agg.columns = names
+    # drop rows with NaN values
+    if dropnan:
+        agg.dropna(inplace=True)
+    return agg
+
 
 # Scaling
-scaler = MinMaxScaler(feature_range = (0, 1))
+scaler = MinMaxScaler(feature_range=(0, 1))
 train_scaled = scaler.fit_transform(train_values)
 test_scaled = scaler.fit_transform(test_values)
 
 # Lags and features
 lags = 2
-features = train_scaled.shape[1] # Changed from test_scaled to train_scaled 01:01 19/04
+# Changed from test_scaled to train_scaled 01:01 19/04
+features = train_scaled.shape[1]
 
 # Frame for supervised learning
 train_reframed = series_to_supervised(train_scaled, lags, 1)
@@ -120,7 +334,7 @@ values_train = train_reframed.values
 values_test = test_reframed.values
 
 # Split into x train, y train, etc
-X_train, y_train = values_train[:, : -1], values_train[: ,1]
+X_train, y_train = values_train[:, : -1], values_train[:, 1]
 X_test, y_test = values_test[:, :-1], values_test[:, -1]
 print(X_train.shape, X_test.shape)
 
@@ -135,23 +349,17 @@ print(X_test.shape)
 np.shape(X_train)
 
 # Define/Train LSTM
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
-from keras.layers import Dropout
 
 # Form network
 model = Sequential()
-model.add(LSTM(50, input_shape = (X_train.shape[1], X_train.shape[2])))
+model.add(LSTM(50, input_shape=(X_train.shape[1], X_train.shape[2])))
 model.add(Dense(1))
-model.compile(loss = 'mae', optimizer = 'adam')
+model.compile(loss='mae', optimizer='adam')
 
 # Fit network
-history = model.fit(X_train, y_train, epochs = 1, batch_size = 72, validation_data = (X_test, y_test), verbose = 2, shuffle = False)
+history = model.fit(X_train, y_train, epochs=1, batch_size=72,
+                    validation_data=(X_test, y_test), verbose=2, shuffle=False)
 
-from math import sqrt
-from numpy import concatenate
-from sklearn.metrics import r2_score
 
 yhat = model.predict(X_test)
 r2_score(yhat, y_test)
