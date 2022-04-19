@@ -11,7 +11,6 @@
 #v3 : add diff2 (bug)
 #v4 : add diff2
 #v5 : black 10
-from IPython.core.display import display, HTML
 black_day = 10
 outlier = False
 rescale = False
@@ -34,7 +33,8 @@ ucf_year = [2017, 2018] # ucf data year used in train
 predmode='all' # 'valid', train', 'all'
 
 #%% [code]
-
+import warnings
+warnings.filterwarnings('ignore')
 import gc
 import os
 from pathlib import Path
@@ -120,7 +120,7 @@ def set_local(df):
         df.loc[sids, 'timestamp'] = df[sids].timestamp - pd.offsets.Hour(zone)
 
 #%%[code]
-!ls '/home/joydipb/Documents/CMT307-Coursework-2-Group-19'
+! ls '/home/joydipb/Documents/CMT307-Coursework-2-Group-19'
 
 
 #%% [code]
@@ -141,6 +141,11 @@ building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype('int')*1
 
 building_meta_df
 
+#%% [code]
+print('Shape of Train Data:',train_df.shape)
+print('Shape of Building Data:', building_meta_df.shape)
+print('Shape of Weather Train Data:', weather_train_df.shape)
+
 
 
 #%% [code]
@@ -150,6 +155,11 @@ building_meta_df
 train_df = train_df [ train_df['building_id'] != 1099 ]
 
 building_meta_df['floor_area'] = building_meta_df.square_feet / building_meta_df.floor_count
+
+#%% [code]
+print('Shape of Train Data:',train_df.shape)
+print('Shape of Building Data:', building_meta_df.shape)
+print('Shape of Weather Train Data:', weather_train_df.shape)
 
 # %%
 # Site Specific Holiday
@@ -200,11 +210,14 @@ for bid in train_df_black.building_id.unique():
         dfm = df[df.meter == meter]
         b = (dfm.meter_reading == 0).astype(int)
         train_df_black.loc[(train_df_black.building_id==bid) & (train_df_black.meter == meter), 'black_count'] = b.groupby((~b.astype(bool)).cumsum()).cumsum()
+
 # %% [code]
 train_df_black[train_df_black.building_id == 954].black_count.plot()
 
 # %% [code]
-train_df.shape
+print('Shape of Train Data:',train_df.shape)
+print('Shape of Building Data:', building_meta_df.shape)
+print('Shape of Weather Train Data:', weather_train_df.shape)
 
 # %% [code]
 train_df = train_df.merge(train_df_black[['timestamp','building_id','meter','black_count']], on=['timestamp','building_id','meter'])
@@ -418,6 +431,9 @@ weather_train_df.head()
 weather_train_df.columns
 
 # %% [code]
+weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
+
+# %% [code]
 ## count encoding
 
 year_map = building_meta_df.year_built.value_counts()
@@ -440,6 +456,11 @@ building_meta_df = reduce_mem_usage(building_meta_df, use_float16=True)
 weather_train_df = reduce_mem_usage(weather_train_df, use_float16=True)
 # %% [code]
 building_meta_df.head()
+
+print('Shape of Train Data:',train_df.shape)
+print('Shape of Building Data:', building_meta_df.shape)
+print('Shape of Weather Train Data:', weather_train_df.shape)
+
 
 # %% [code]
 ## SG Filter for Weather
@@ -479,9 +500,8 @@ weather_train_df[weather_train_df.site_id==0].air_diff[:100].plot()
 
 # %% [markdown]
  ### For time series data, it is better to consider time-splitting.
-# %% [markdown]
+ ## However just to keep it simple, I am using K-fold cross validation
 
-## However just to keep it simple, I am using K-fold cross validation
 # %% [code]
 ## Train Model 
 
@@ -610,7 +630,6 @@ shuffle = False
 kf = StratifiedKFold(n_splits=folds)
 
 # %% [markdown]
-
 ### Train model by each group # (site-meter)
 
 # %% [code]
@@ -626,6 +645,8 @@ def plot_feature_importance(model):
 
 
 # %% [code]
+
+gc.collect()
 
 for groupNum_train in building_meta_df['groupNum_train'].unique():
     X_train, y_train = create_X_y(train_df, groupNum_train=groupNum_train)
@@ -679,6 +700,10 @@ print('loading...')
 test_df = pd.read_feather(root/'test.feather')
 weather_test_df = pd.read_feather(root/'weather_test.feather')
 
+print('Before Preprocessing ....')
+print('Shape of test data: ', test_df.shape)
+print('Shape of Weather test data: ',weather_test_df.shape)
+
 weather_test_df = weather_test_df.drop_duplicates(['timestamp', 'site_id'])
 set_local(weather_test_df)
 add_holiyday(weather_test_df)
@@ -707,7 +732,10 @@ test_df = reduce_mem_usage(test_df, use_float16=True)
 weather_test_df = reduce_mem_usage(weather_test_df, use_float16=True)
 
 gc.collect()
-print (test_df.shape)
+
+print('After Preprocessing ....')
+print('Shape of test data: ', test_df.shape)
+print('Shape of Weather test data: ',weather_test_df.shape)
 
 
 
@@ -777,7 +805,7 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
     gc.collect()
 
 # %% [markdown]
-# site-0 correction 
+### site-0 correction 
 
 # %% [code]
 
@@ -808,6 +836,10 @@ sample_submission.head()
 
 # %% [code]
 sample_submission.tail()
+
+# %% [code]
+print('Shape of Sample Submission', sample_submission.shape)
+
 # %% [code]
 if not debug:
     sample_submission.to_csv('submission.csv', index=False, float_format='%.4f')
@@ -816,9 +848,9 @@ if not debug:
 np.log1p(sample_submission['meter_reading']).hist(bins=100)
 # %%
 # %%[code]
-## Export the test and train data frame
+## Export the processed data frame
 
-train_df.to_csv('train_processed.csv', index=False)
-test_df.to_csv('test_processed.csv',index=False)
+train_df.to_csv('train_df_processed.csv')
+test_df.to_csv('test_df_processed.csv')
 
 # %%
