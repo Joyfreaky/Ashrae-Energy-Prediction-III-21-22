@@ -147,6 +147,10 @@ building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype(
 building_meta_df
 
 # %% [code]
+
+df_groupNum_median = pd.read_pickle(root/'df_groupNum_median.pickle')
+
+# %% [code]
 print('Shape of Train Data:', train_df.shape)
 print('Shape of Building Data:', building_meta_df.shape)
 print('Shape of Weather Train Data:', weather_train_df.shape)
@@ -570,7 +574,7 @@ feature_cols = ['square_feet', 'year_built'] + [
     'dew_smooth', 'air_smooth',
     'dew_diff', 'air_diff',
     'dew_diff2', 'air_diff2'
-]  # + list(df_groupNum_median.drop('timestamp',axis=1).columns)
+]  + list(df_groupNum_median.drop('timestamp',axis=1).columns)
 
 # %% [code]
 train_df = train_df.merge(building_meta_df, on=[
@@ -597,8 +601,8 @@ def create_X_y(train_df, groupNum_train):
 
     target_train_df = train_df[train_df['groupNum_train']
                                == groupNum_train].copy()
-    # target_train_df = target_train_df.merge(df_groupNum_median, on=['timestamp'], how='left')
-    # target_train_df['group_median_'+str(groupNum_train)] = np.nan
+    target_train_df = target_train_df.merge(df_groupNum_median, on=['timestamp'], how='left')
+    target_train_df['group_median_'+str(groupNum_train)] = np.nan
 
     X_train = target_train_df[feature_cols + category_cols]
     y_train = target_train_df['meter_reading_log1p'].values
@@ -804,12 +808,12 @@ def create_X(test_df, groupNum_train):
 
     target_test_df = test_df[test_df['groupNum_train']
                              == groupNum_train].copy()
-    # target_test_df = target_test_df.merge(df_groupNum_median, on=['timestamp'], how='left')
+    target_test_df = target_test_df.merge(df_groupNum_median, on=['timestamp'], how='left')
     target_test_df = target_test_df.merge(
         building_meta_df, on=['building_id', 'meter', 'groupNum_train'], how='left')
     target_test_df = target_test_df.merge(
         weather_test_df, on=['site_id', 'timestamp'], how='left')
-    # target_test_df['group_median_'+str(groupNum_train)] = np.nan
+    target_test_df['group_median_'+str(groupNum_train)] = np.nan
 
     X_test = target_test_df[feature_cols + category_cols]
 
@@ -916,8 +920,15 @@ print('Shape of Sample Submission', sample_submission.shape)
 # %% [code]
 if not debug:
     sample_submission.to_csv(
-        'submission.csv', index=False, float_format='%.4f')
+        'submission_blend_by_meter-median.csv', index=False, float_format='%.4f')
 
 # %% [code]
 np.log1p(sample_submission['meter_reading']).hist(bins=100)
-# %%
+# %% [code]
+ ## Submission
+! mkdir -p ~/.kaggle/ && \
+  echo '{"username":"joydipbhowmick","key":"5bd4e6a1fec9fc7f8a93def26785a6d2"}' > ~/.kaggle/kaggle.json && \
+  chmod 600 ~/.kaggle/kaggle.json # Create a new direcory use the kaggle token key in that and make it read only to current user.
+! kaggle competitions submit -c ashrae-energy-prediction -f submission_blend_by_meter-median.csv -m "LightGBM blend with site-meter-median"
+
+# %% [code]
