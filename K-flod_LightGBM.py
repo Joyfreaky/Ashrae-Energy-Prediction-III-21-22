@@ -504,7 +504,6 @@ print('Shape of Weather Train Data:', weather_train_df.shape)
 # %% [code]
 # SG Filter for Weather
 
-
 def add_sg(df):
     w = 11
     p = 2
