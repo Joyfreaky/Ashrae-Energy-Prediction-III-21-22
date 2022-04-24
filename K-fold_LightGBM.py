@@ -53,17 +53,8 @@ ucf_clip = False
 ucf_year = [2017, 2018]  # ucf data year used in train
 
 predmode = 'all'  # 'valid', train', 'all'
-
-# %% [code]
 warnings.filterwarnings('ignore')
 
-
-# --- models ---
-
-
-# %% [code]
-
-os.listdir('/home/joydipb/Documents/CMT307-Coursework-2-Group-19')
 
 # %% [code]
 # Original code from https://www.kaggle.com/gemartin/load-data-reduce-memory-usage by @gemartin
@@ -125,10 +116,6 @@ def set_local(df):
         df.loc[sids, 'timestamp'] = df[sids].timestamp - pd.offsets.Hour(zone)
 
 
-# %%[code]
-! ls '/home/joydipb/Documents/CMT307-Coursework-2-Group-19'
-
-
 # %% [code]
 
 root = Path('/home/joydipb/Documents/CMT307-Coursework-2-Group-19')
@@ -147,10 +134,6 @@ building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype(
 building_meta_df
 
 # %% [code]
-
-df_groupNum_median = pd.read_pickle(root/'df_groupNum_median.pickle')
-
-# %% [code]
 print('Shape of Train Data:', train_df.shape)
 print('Shape of Building Data:', building_meta_df.shape)
 print('Shape of Weather Train Data:', weather_train_df.shape)
@@ -160,15 +143,10 @@ print('Shape of Weather Train Data:', weather_train_df.shape)
 
 # remove buildings
 
-train_df = train_df[train_df['building_id'] != 1099]
+# train_df = train_df[train_df['building_id'] != 1099]
 
 building_meta_df['floor_area'] = building_meta_df.square_feet / \
     building_meta_df.floor_count
-
-# %% [code]
-print('Shape of Train Data:', train_df.shape)
-print('Shape of Building Data:', building_meta_df.shape)
-print('Shape of Weather Train Data:', weather_train_df.shape)
 
 # %%
 # Site Specific Holiday
@@ -210,47 +188,10 @@ add_holiyday(weather_train_df)
 weather_train_df.head()
 
 # %% [code]
-# Threshold By Black day¶
-
-# # Count zero streak
-train_df_black = train_df.copy()
-train_df_black = train_df_black.merge(
-    building_meta_df, on=['building_id', 'meter'], how='left')
-train_df_black = train_df_black.merge(
-    weather_train_df, on=['site_id', 'timestamp'], how='left')
-
-train_df_black['black_count'] = 0
-
-for bid in train_df_black.building_id.unique():
-    df = train_df_black[train_df_black.building_id == bid]
-    for meter in df.meter.unique():
-        dfm = df[df.meter == meter]
-        b = (dfm.meter_reading == 0).astype(int)
-        train_df_black.loc[(train_df_black.building_id == bid) & (
-            train_df_black.meter == meter), 'black_count'] = b.groupby((~b.astype(bool)).cumsum()).cumsum()
-
-# %% [code]
-train_df_black[train_df_black.building_id == 954].black_count.plot()
-
-
-# %% [code]
-train_df = train_df.merge(train_df_black[['timestamp', 'building_id', 'meter', 'black_count']], on=[
-                          'timestamp', 'building_id', 'meter'])
-
-# %% [code]
-train_df = train_df[train_df['black_count'] <
-                    24*black_day].drop('black_count', axis=1)
-# %% [code]
-train_df.shape
-
-# %% [code]
-del train_df_black
-gc.collect()
-# %% [code]
 # Removing weired data on site_id 0
 #building_meta_df[building_meta_df.site_id == 0]
-train_df = train_df.query(
-    'not (building_id <= 104 & meter == 0 & timestamp <= "2016-05-20")')
+# train_df = train_df.query(
+#     'not (building_id <= 104 & meter == 0 & timestamp <= "2016-05-20")')
 
 # %% [code]
 train_df[train_df.building_id == 954].meter_reading.plot()
@@ -270,6 +211,389 @@ train_df[train_df.building_id == 954].meter_reading.plot()
 
 # %% [code]
 train_df[train_df.building_id == 1221].meter_reading.plot()
+
+# %% [code]
+train_df = train_df.query(
+    'not (building_id <= 104 & meter == 0 & timestamp <= "2016-05-20 18")')
+train_df = train_df.query(
+    'not (building_id == 681 & meter == 0 & timestamp <= "2016-04-27")')
+train_df = train_df.query(
+    'not (building_id == 761 & meter == 0 & timestamp <= "2016-09-02")')
+train_df = train_df.query(
+    'not (building_id == 799 & meter == 0 & timestamp <= "2016-09-02")')
+train_df = train_df.query(
+    'not (building_id == 802 & meter == 0 & timestamp <= "2016-08-24")')
+train_df = train_df.query(
+    'not (building_id == 1073 & meter == 0 & timestamp <= "2016-10-26")')
+train_df = train_df.query(
+    'not (building_id == 1094 & meter == 0 & timestamp <= "2016-09-08")')
+train_df = train_df.query(
+    'not (building_id == 29 & meter == 0 & timestamp <= "2016-08-10")')
+train_df = train_df.query(
+    'not (building_id == 40 & meter == 0 & timestamp <= "2016-06-04")')
+train_df = train_df.query(
+    'not (building_id == 45 & meter == 0 & timestamp <= "2016-07")')
+train_df = train_df.query(
+    'not (building_id == 106 & meter == 0 & timestamp <= "2016-11")')
+train_df = train_df.query(
+    'not (building_id == 107 & meter == 0 & timestamp >= "2016-11-10")')
+train_df = train_df.query(
+    'not (building_id == 112 & meter == 0 & timestamp < "2016-10-31 15")')
+train_df = train_df.query(
+    'not (building_id == 144 & meter == 0 & timestamp > "2016-05-14" & timestamp < "2016-10-31")')
+train_df = train_df.query(
+    'not (building_id == 147 & meter == 0 & timestamp > "2016-06-05 19" & timestamp < "2016-07-18 15")')
+train_df = train_df.query(
+    'not (building_id == 171 & meter == 0 & timestamp <= "2016-07-05")')
+train_df = train_df.query(
+    'not (building_id == 177 & meter == 0 & timestamp > "2016-06-04" & timestamp < "2016-06-25")')
+train_df = train_df.query(
+    'not (building_id == 258 & meter == 0 & timestamp > "2016-09-26" & timestamp < "2016-12-12")')
+train_df = train_df.query(
+    'not (building_id == 258 & meter == 0 & timestamp > "2016-08-30" & timestamp < "2016-09-08")')
+train_df = train_df.query(
+    'not (building_id == 258 & meter == 0 & timestamp > "2016-09-18" & timestamp < "2016-09-25")')
+train_df = train_df.query(
+    'not (building_id == 260 & meter == 0 & timestamp <= "2016-05-11")')
+train_df = train_df.query(
+    'not (building_id == 269 & meter == 0 & timestamp > "2016-06-04" & timestamp < "2016-06-25")')
+train_df = train_df.query(
+    'not (building_id == 304 & meter == 0 & timestamp >= "2016-11-20")')
+train_df = train_df.query(
+    'not (building_id == 545 & meter == 0 & timestamp > "2016-01-17" & timestamp < "2016-02-10")')
+train_df = train_df.query(
+    'not (building_id == 604 & meter == 0 & timestamp < "2016-11-21")')
+train_df = train_df.query(
+    'not (building_id == 693 & meter == 0 & timestamp > "2016-09-07" & timestamp < "2016-11-23")')
+train_df = train_df.query(
+    'not (building_id == 693 & meter == 0 & timestamp > "2016-07-12" & timestamp < "2016-05-29")')
+train_df = train_df.query(
+    'not (building_id == 723 & meter == 0 & timestamp > "2016-10-06" & timestamp < "2016-11-22")')
+train_df = train_df.query(
+    'not (building_id == 733 & meter == 0 & timestamp > "2016-05-29" & timestamp < "2016-06-22")')
+train_df = train_df.query(
+    'not (building_id == 733 & meter == 0 & timestamp > "2016-05-19" & timestamp < "2016-05-20")')
+train_df = train_df.query(
+    'not (building_id == 803 & meter == 0 & timestamp > "2016-9-25")')
+train_df = train_df.query(
+    'not (building_id == 815 & meter == 0 & timestamp > "2016-05-17" & timestamp < "2016-11-17")')
+train_df = train_df.query(
+    'not (building_id == 848 & meter == 0 & timestamp > "2016-01-15" & timestamp < "2016-03-20")')
+train_df = train_df.query(
+    'not (building_id == 857 & meter == 0 & timestamp > "2016-04-13")')
+train_df = train_df.query(
+    'not (building_id == 909 & meter == 0 & timestamp < "2016-02-02")')
+train_df = train_df.query(
+    'not (building_id == 909 & meter == 0 & timestamp < "2016-06-23")')
+train_df = train_df.query(
+    'not (building_id == 1008 & meter == 0 & timestamp > "2016-10-30" & timestamp < "2016-11-21")')
+train_df = train_df.query(
+    'not (building_id == 1113 & meter == 0 & timestamp < "2016-07-27")')
+train_df = train_df.query(
+    'not (building_id == 1153 & meter == 0 & timestamp < "2016-01-20")')
+train_df = train_df.query(
+    'not (building_id == 1169 & meter == 0 & timestamp < "2016-08-03")')
+train_df = train_df.query(
+    'not (building_id == 1170 & meter == 0 & timestamp > "2016-06-30" & timestamp < "2016-07-05")')
+train_df = train_df.query(
+    'not (building_id == 1221 & meter == 0 & timestamp < "2016-11-04")')
+train_df = train_df.query(
+    'not (building_id == 1225 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1234 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1233 & building_id <= 1234 & meter == 0 & timestamp > "2016-01-13 22" & timestamp < "2016-03-08 12")')
+train_df = train_df.query(
+    'not (building_id == 1241 & meter == 0 & timestamp > "2016-07-14" & timestamp < "2016-11-19")')
+train_df = train_df.query(
+    'not (building_id == 1250 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1255 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1264 & meter == 0 & timestamp > "2016-08-23")')
+train_df = train_df.query(
+    'not (building_id == 1265 & meter == 0 & timestamp > "2016-05-06" & timestamp < "2016-05-26")')
+train_df = train_df.query(
+    'not (building_id == 1272 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1275 & building_id <= 1280 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1283 & meter == 0 & timestamp > "2016-07-08" & timestamp < "2016-08-03")')
+train_df = train_df.query(
+    'not (building_id >= 1291 & building_id <= 1302 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1303 & meter == 0 & timestamp > "2016-07-25 22" & timestamp < "2016-07-27 16")')
+train_df = train_df.query(
+    'not (building_id == 1303 & meter == 0 & timestamp > "2016-01-26" & timestamp < "2016-06-02 12")')
+train_df = train_df.query(
+    'not (building_id == 1319 & meter == 0 & timestamp > "2016-05-17 16" & timestamp < "2016-06-07 12")')
+train_df = train_df.query(
+    'not (building_id == 1319 & meter == 0 & timestamp > "2016-08-18 14" & timestamp < "2016-09-02 14")')
+train_df = train_df.query(
+    'not (building_id == 1322 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+
+# 2nd cleaning
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-10-14 22" & timestamp < "2016-10-17 08")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-07-01 14" & timestamp < "2016-07-05 06")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 1 & timestamp > "2016-10-14 22" & timestamp < "2016-10-17 08")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 1 & timestamp > "2016-07-01 14" & timestamp < "2016-07-05 06")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 2 & timestamp > "2016-10-14 22" & timestamp < "2016-10-17 08")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 2 & timestamp > "2016-07-01 14" & timestamp < "2016-07-05 06")')
+train_df = train_df.query(
+    'not (building_id == 1272 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1291 & building_id <= 1297 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1300 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1302 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1291 & building_id <= 1299 & meter == 2 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1221 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1225 & building_id <= 1226 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1233 & building_id <= 1234 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1241 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1223 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1226 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1233 & building_id <= 1234 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1225 & building_id <= 1226 & meter == 2 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1305 & meter == 2 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1307 & meter == 2 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1223 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1231 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1233 & building_id <= 1234 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1272 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id >= 1275 & building_id <= 1297 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1300 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1302 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1293 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-25 12")')
+train_df = train_df.query(
+    'not (building_id == 1302 & meter == 3 & timestamp > "2016-09-28 07" & timestamp < "2016-10-25 12")')
+train_df = train_df.query(
+    'not (building_id == 1223 & meter == 0 & timestamp > "2016-9-28 07" & timestamp < "2016-10-11 18")')
+train_df = train_df.query(
+    'not (building_id == 1225 & meter == 1 & timestamp > "2016-8-22 23" & timestamp < "2016-10-11 14")')
+train_df = train_df.query(
+    'not (building_id == 1230 & meter == 1 & timestamp > "2016-8-22 08" & timestamp < "2016-10-05 18")')
+train_df = train_df.query(
+    'not (building_id == 904 & meter == 0 & timestamp < "2016-02-17 08")')
+train_df = train_df.query(
+    'not (building_id == 986 & meter == 0 & timestamp < "2016-02-17 08")')
+train_df = train_df.query(
+    'not (building_id == 954 & meter == 0 & timestamp < "2016-08-08 11")')
+train_df = train_df.query(
+    'not (building_id == 954 & meter == 0 & timestamp < "2016-06-23 08")')
+train_df = train_df.query(
+    'not (building_id >= 745 & building_id <= 770 & meter == 1 & timestamp > "2016-10-05 01" & timestamp < "2016-10-10 09")')
+train_df = train_df.query(
+    'not (building_id >= 774 & building_id <= 787 & meter == 1 & timestamp > "2016-10-05 01" & timestamp < "2016-10-10 09")')
+
+# 3rd cleaning hourly spikes
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-05-11 09" & timestamp < "2016-05-12 01")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 1 & timestamp > "2016-05-11 09" & timestamp < "2016-05-12 01")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 2 & timestamp > "2016-05-11 09" & timestamp < "2016-05-12 01")')
+
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp == "2016-02-26 01")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 1 & timestamp == "2016-02-26 01")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 2 & timestamp == "2016-02-26 01")')
+
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-03-29 10" & timestamp < "2016-03-30 12")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 1 & timestamp > "2016-03-29 10" & timestamp < "2016-03-30 12")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 2 & timestamp > "2016-03-29 10" & timestamp < "2016-03-30 12")')
+
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-01-19 23" & timestamp < "2016-01-28 15")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 1 & timestamp > "2016-01-19 23" & timestamp < "2016-01-28 15")')
+train_df = train_df.query(
+    'not (building_id >= 874 & building_id <= 997 & meter == 2 & timestamp > "2016-01-19 23" & timestamp < "2016-01-28 15")')
+
+train_df = train_df.query(
+    'not (building_id != 1227 & building_id != 1281 & building_id != 1314 & building_id >=1223 & building_id < 1335 & meter==0 & meter_reading==0)')
+
+# 4th cleaning (some using hindsight from leaks)
+train_df = train_df.query(
+    'not (building_id >= 1223 & building_id <= 1324 & meter==1 & timestamp > "2016-07-16 04" & timestamp < "2016-07-19 11")')
+train_df = train_df.query(
+    'not (building_id == 107 & meter == 0 & timestamp <= "2016-07-06")')
+train_df = train_df.query(
+    'not (building_id == 180 & timestamp >= "2016-02-17 12")')
+train_df = train_df.query('not (building_id == 182 & meter == 0)')
+train_df = train_df.query(
+    'not (building_id == 191 & meter == 0 & timestamp >= "2016-12-22 09")')
+train_df = train_df.query(
+    'not (building_id == 192 & meter == 1 & timestamp >= "2016-05-09 18")')
+train_df = train_df.query(
+    'not (building_id == 192 & meter == 3 & timestamp >= "2016-03-29 05" & timestamp <= "2016-04-04 08")')
+train_df = train_df.query(
+    'not (building_id == 207 & meter == 1 & timestamp > "2016-07-02 20" & timestamp < "2016-08-25 12")')
+train_df = train_df.query(
+    'not (building_id == 258 & timestamp > "2016-09-18" & timestamp < "2016-12-12 13")')
+train_df = train_df.query(
+    'not (building_id == 258 & timestamp > "2016-08-29 08" & timestamp < "2016-09-08 14")')
+train_df = train_df.query(
+    'not (building_id == 257 & meter == 1 & timestamp < "2016-03-25 16")')
+train_df = train_df.query(
+    'not (building_id == 260 & meter == 1 & timestamp > "2016-05-10 17" & timestamp < "2016-08-17 11")')
+train_df = train_df.query(
+    'not (building_id == 260 & meter == 1 & timestamp > "2016-08-28 01" & timestamp < "2016-10-31 13")')
+train_df = train_df.query(
+    'not (building_id == 220 & meter == 1 & timestamp > "2016-09-23 01" & timestamp < "2016-09-23 12")')
+train_df = train_df.query(
+    'not (building_id == 281 & meter == 1 & timestamp > "2016-10-25 08" & timestamp < "2016-11-04 15")')
+train_df = train_df.query(
+    'not (building_id == 273 & meter == 1 & timestamp > "2016-04-03 04" & timestamp < "2016-04-29 15")')
+train_df = train_df.query(
+    'not (building_id == 28 & meter == 0 & timestamp < "2016-10-14 20")')
+train_df = train_df.query(
+    'not (building_id == 71 & meter == 0 & timestamp < "2016-08-18 20")')
+train_df = train_df.query(
+    'not (building_id == 76 & meter == 0 & timestamp > "2016-06-04 09" & timestamp < "2016-06-04 14")')
+train_df = train_df.query(
+    'not (building_id == 101 & meter == 0 & timestamp > "2016-10-12 13" & timestamp < "2016-10-12 18")')
+train_df = train_df.query(
+    'not (building_id == 7 & meter == 1 & timestamp > "2016-11-03 09" & timestamp < "2016-11-28 14")')
+train_df = train_df.query(
+    'not (building_id == 9 & meter == 1 & timestamp > "2016-12-06 08")')
+train_df = train_df.query(
+    'not (building_id == 43 & meter == 1 & timestamp > "2016-04-03 08" & timestamp < "2016-06-06 13")')
+train_df = train_df.query(
+    'not (building_id == 60 & meter == 1 & timestamp > "2016-05-01 17" & timestamp < "2016-05-01 21")')
+train_df = train_df.query(
+    'not (building_id == 75 & meter == 1 & timestamp > "2016-08-05 13" & timestamp < "2016-08-26 12")')
+train_df = train_df.query(
+    'not (building_id == 95 & meter == 1 & timestamp > "2016-08-08 10" & timestamp < "2016-08-26 13")')
+train_df = train_df.query(
+    'not (building_id == 97 & meter == 1 & timestamp > "2016-08-08 14" & timestamp < "2016-08-25 14")')
+train_df = train_df.query(
+    'not (building_id == 1232 & meter == 1 & timestamp > "2016-06-23 16" & timestamp < "2016-08-31 20")')
+train_df = train_df.query(
+    'not (building_id == 1236 & meter == 1 & meter_reading >= 3000)')
+train_df = train_df.query(
+    'not (building_id == 1239 & meter == 1 & timestamp > "2016-03-11 16" & timestamp < "2016-03-27 17")')
+train_df = train_df.query(
+    'not (building_id == 1264 & meter == 1 & timestamp > "2016-08-22 17" & timestamp < "2016-09-22 20")')
+train_df = train_df.query(
+    'not (building_id == 1264 & meter == 1 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
+train_df = train_df.query(
+    'not (building_id == 1269 & meter == 1 & meter_reading >= 2000)')
+train_df = train_df.query(
+    'not (building_id == 1272 & meter == 1 & timestamp > "2016-08-11 12" & timestamp < "2016-08-30 19")')
+train_df = train_df.query(
+    'not (building_id == 1273 & meter == 1 & timestamp > "2016-05-31 14" & timestamp < "2016-06-17")')
+train_df = train_df.query(
+    'not (building_id == 1276 & meter == 1 & timestamp < "2016-02-03 23")')
+train_df = train_df.query(
+    'not (building_id == 1280 & meter == 1 & timestamp > "2016-05-18" & timestamp < "2016-05-26 09")')
+train_df = train_df.query(
+    'not (building_id == 1280 & meter == 1 & timestamp > "2016-02-28 23" & timestamp < "2016-05-02 05")')
+train_df = train_df.query(
+    'not (building_id == 1280 & meter == 1 & timestamp > "2016-06-12 01" & timestamp < "2016-7-07 06")')
+train_df = train_df.query(
+    'not (building_id == 1288 & meter == 1 & timestamp > "2016-07-07 15" & timestamp < "2016-08-12 17")')
+train_df = train_df.query(
+    'not (building_id == 1311 & meter == 1 & timestamp > "2016-04-25 18" & timestamp < "2016-05-13 14")')
+train_df = train_df.query('not (building_id == 1099 & meter == 2)')
+
+train_df = train_df.query(
+    'not (building_id == 1329 & meter == 0 & timestamp > "2016-04-28 00" & timestamp < "2016-04-28 07")')
+train_df = train_df.query(
+    'not (building_id == 1331 & meter == 0 & timestamp > "2016-04-28 00" & timestamp < "2016-04-28 07")')
+train_df = train_df.query(
+    'not (building_id == 1427 & meter == 0 & timestamp > "2016-04-11 10" & timestamp < "2016-04-11 14")')
+train_df = train_df.query(
+    'not (building_id == 1426 & meter == 2 & timestamp > "2016-05-03 09" & timestamp < "2016-05-03 14")')
+train_df = train_df.query(
+    'not (building_id == 1345 & meter == 0 & timestamp < "2016-03-01")')
+train_df = train_df.query(
+    'not (building_id == 1346 & timestamp < "2016-03-01")')
+train_df = train_df.query(
+    'not (building_id == 1359 & meter == 0 & timestamp > "2016-04-25 17" & timestamp < "2016-07-22 14")')
+train_df = train_df.query(
+    'not (building_id == 1365 & meter == 0 & timestamp > "2016-08-19 00" & timestamp < "2016-08-19 07")')
+train_df = train_df.query(
+    'not (building_id == 1365 & meter == 0 & timestamp > "2016-06-18 22" & timestamp < "2016-06-19 06")')
+
+train_df = train_df.query(
+    'not (building_id == 18 & meter == 0 & timestamp > "2016-06-04 09" & timestamp < "2016-06-04 16")')
+train_df = train_df.query(
+    'not (building_id == 18 & meter == 0 & timestamp > "2016-11-05 05" & timestamp < "2016-11-05 15")')
+train_df = train_df.query(
+    'not (building_id == 101 & meter == 0 & meter_reading > 800)')
+
+train_df = train_df.query(
+    'not (building_id == 1384 & meter == 0 & meter_reading == 0 )')
+train_df = train_df.query(
+    'not (building_id >= 1289 & building_id <= 1301 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1243 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1263 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1284 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1286 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1263 & meter == 0 & timestamp > "2016-11-10 11" & timestamp < "2016-11-10 15")')
+
+train_df = train_df.query(
+    'not (building_id == 1238 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1329 & meter == 2 & timestamp > "2016-11-21 12" & timestamp < "2016-11-29 12")')
+train_df = train_df.query(
+    'not (building_id == 1249 & meter == 2 & meter_reading == 0)')
+
+train_df = train_df.query(
+    'not (building_id == 1250 & meter == 2 & meter_reading == 0)')
+train_df = train_df.query(
+    'not (building_id == 1256 & meter == 2 & timestamp > "2016-03-05 18" & timestamp < "2016-03-05 22")')
+train_df = train_df.query(
+    'not (building_id == 1256 & meter == 2 & timestamp > "2016-03-27 00" & timestamp < "2016-03-27 23")')
+train_df = train_df.query(
+    'not (building_id == 1256 & meter == 2 & timestamp > "2016-04-11 09" & timestamp < "2016-04-13 03")')
+train_df = train_df.query(
+    'not (building_id == 1256 & meter == 2 & timestamp > "2016-04-29 00" & timestamp < "2016-04-30 15")')
+train_df = train_df.query(
+    'not (building_id == 1303 & meter == 2 & timestamp < "2016-06-06 19")')
+train_df = train_df.query(
+    'not (building_id >= 1223 & building_id <= 1324 & meter == 1 & timestamp > "2016-08-11 17" & timestamp < "2016-08-12 17")')
+train_df = train_df.query(
+    'not (building_id >= 1223 & building_id <= 1324 & building_id != 1296 & building_id != 129 & building_id != 1298 & building_id != 1299 & meter == 2 & timestamp > "2016-08-11 17" & timestamp < "2016-08-12 17")')
+train_df = train_df.query(
+    'not (building_id >= 1223 & building_id <= 1324 & meter == 3 & timestamp > "2016-08-11 17" & timestamp < "2016-08-12 17")')
 
 # %% [code]
 # Delete Outliear¶
@@ -316,21 +640,21 @@ gc.collect()
 
 
 # %% [code]
-for bid in funny_bids:
-    plt.figure(figsize=[20, 3])
-    plt.subplot(141)
-    plt.plot(train_df[(train_df.building_id == bid)
-             & (train_df.meter == 0)].meter_reading)
-    plt.subplot(142)
-    plt.plot(train_df[(train_df.building_id == bid)
-             & (train_df.meter == 1)].meter_reading)
-    plt.subplot(143)
-    plt.plot(train_df[(train_df.building_id == bid)
-             & (train_df.meter == 2)].meter_reading)
-    plt.subplot(144)
-    plt.plot(train_df[(train_df.building_id == bid)
-             & (train_df.meter == 3)].meter_reading)
-    plt.title(bid)
+# for bid in funny_bids:
+#     plt.figure(figsize=[20, 3])
+#     plt.subplot(141)
+#     plt.plot(train_df[(train_df.building_id == bid)
+#              & (train_df.meter == 0)].meter_reading)
+#     plt.subplot(142)
+#     plt.plot(train_df[(train_df.building_id == bid)
+#              & (train_df.meter == 1)].meter_reading)
+#     plt.subplot(143)
+#     plt.plot(train_df[(train_df.building_id == bid)
+#              & (train_df.meter == 2)].meter_reading)
+#     plt.subplot(144)
+#     plt.plot(train_df[(train_df.building_id == bid)
+#              & (train_df.meter == 3)].meter_reading)
+#     plt.title(bid)
 # %% [code]
 # Site-0 Correction¶
 # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
@@ -544,11 +868,12 @@ weather_train_df[weather_train_df.site_id == 0].air_diff[:100].plot()
 
 category_cols = ['building_id', 'site_id', 'primary_use',
                  'IsHoliday', 'groupNum_train']  # , 'meter'
-feature_cols = ['square_feet', 'year_built'] + [
+feature_cols = ['square_feet_np_log1p', 'year_built'] + [
     'hour', 'weekend',
     #    'day', # 'month' ,
     #    'dayofweek',
     #    'building_median'
+    #    'square_feet'
 ] + [
     'air_temperature', 'cloud_coverage',
     'dew_temperature', 'precip_depth_1_hr',
@@ -573,7 +898,7 @@ feature_cols = ['square_feet', 'year_built'] + [
     'dew_smooth', 'air_smooth',
     'dew_diff', 'air_diff',
     'dew_diff2', 'air_diff2'
-]  + list(df_groupNum_median.drop('timestamp',axis=1).columns)
+ ] 
 
 # %% [code]
 train_df = train_df.merge(building_meta_df, on=[
@@ -588,6 +913,10 @@ train_df = train_df.merge(weather_train_df, on=[
                           'site_id', 'timestamp'], how='left')
 
 # %% [code]
+
+train_df['square_feet_np_log1p'] = np.log1p(train_df['square_feet'])
+
+# %% [code]
 train_df = reduce_mem_usage(train_df, use_float16=True)
 
 del weather_train_df
@@ -600,9 +929,7 @@ def create_X_y(train_df, groupNum_train):
 
     target_train_df = train_df[train_df['groupNum_train']
                                == groupNum_train].copy()
-    target_train_df = target_train_df.merge(df_groupNum_median, on=['timestamp'], how='left')
-    target_train_df['group_median_'+str(groupNum_train)] = np.nan
-
+    
     X_train = target_train_df[feature_cols + category_cols]
     y_train = target_train_df['meter_reading_log1p'].values
 
@@ -616,7 +943,7 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
     """Train Light GBM model"""
     X_train, y_train = train
     X_valid, y_valid = val
-    metric = 'l2'
+    metric = 'rmse'
     params = {'num_leaves': 31,
               'objective': 'regression',
               #               'max_depth': -1,
@@ -662,13 +989,12 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
     y_pred_valid = model.predict(X_valid, num_iteration=model.best_iteration)
 
     print('best_score', model.best_score)
-    log = {'train/mae': model.best_score['training']['l2'],
-           'valid/mae': model.best_score['valid_1']['l2']}
+    log = {'train/rmse': model.best_score['training']['rmse'],
+           'valid/rmse': model.best_score['valid_1']['rmse']}
     return model, y_pred_valid, log
 
 
 # %% [code]
-
 seed = 666
 shuffle = False
 #kf = KFold(n_splits=folds, shuffle=shuffle, random_state=seed)
@@ -702,6 +1028,7 @@ gc.collect()
 for groupNum_train in building_meta_df['groupNum_train'].unique():
     X_train, y_train = create_X_y(train_df, groupNum_train=groupNum_train)
     y_valid_pred_total = np.zeros(X_train.shape[0])
+
     gc.collect()
     print('groupNum_train', groupNum_train, X_train.shape)
 
@@ -728,6 +1055,7 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
         model, y_pred_valid, log = fit_lgbm(train_data, valid_data, cat_features=category_cols,
                                             num_rounds=num_rounds, lr=0.05, bf=0.7)
         y_valid_pred_total[valid_idx] = y_pred_valid
+        #plot_feature_importance(model)
         exec('models' + str(groupNum_train) + '.append([mindex, model])')
         gc.collect()
         if debug:
@@ -764,7 +1092,7 @@ add_holiyday(weather_test_df)
 print('preprocessing building...')
 test_df['date'] = test_df['timestamp'].dt.date
 preprocess(test_df)
-#test_df['building_median'] = test_df['building_id'].map(building_median)
+
 
 print('preprocessing weather...')
 weather_test_df = weather_test_df.groupby('site_id').apply(
@@ -776,21 +1104,18 @@ add_sg(weather_test_df)
 add_lag_feature(weather_test_df, window=3)
 add_lag_feature(weather_test_df, window=72)
 
-#bid_map = train_df.building_id.value_counts()
 test_df['bid_cnt'] = test_df.building_id.map(bid_map)
 
-test_df = test_df.merge(building_meta_df[['building_id', 'meter', 'groupNum_train']], on=[
+test_df = test_df.merge(building_meta_df[['building_id', 'meter', 'groupNum_train','square_feet']], on=[
                         'building_id', 'meter'], how='left')
+
+test_df['square_feet_np_log1p'] = np.log1p(test_df['square_feet'])
 
 print('reduce mem usage...')
 test_df = reduce_mem_usage(test_df, use_float16=True)
 weather_test_df = reduce_mem_usage(weather_test_df, use_float16=True)
 
 gc.collect()
-
-print('After Preprocessing ....')
-print('Shape of test data: ', test_df.shape)
-print('Shape of Weather test data: ', weather_test_df.shape)
 
 
 # %% [code]
@@ -807,13 +1132,10 @@ def create_X(test_df, groupNum_train):
 
     target_test_df = test_df[test_df['groupNum_train']
                              == groupNum_train].copy()
-    target_test_df = target_test_df.merge(df_groupNum_median, on=['timestamp'], how='left')
     target_test_df = target_test_df.merge(
         building_meta_df, on=['building_id', 'meter', 'groupNum_train'], how='left')
     target_test_df = target_test_df.merge(
         weather_test_df, on=['site_id', 'timestamp'], how='left')
-    target_test_df['group_median_'+str(groupNum_train)] = np.nan
-
     X_test = target_test_df[feature_cols + category_cols]
 
     return X_test
@@ -838,15 +1160,7 @@ def pred_all(X_test, models, batch_size=1000000):
 
 
 def pred(X_test, models, batch_size=1000000):
-    if predmode == 'valid':
-        print('valid pred')
-        return pred_valid(X_test, models, batch_size=1000000)
-    elif predmode == 'train':
-        print('train pred')
-        return pred_train(X_test, models, batch_size=1000000)
-    else:
-        print('all pred')
-        return pred_all(X_test, models, batch_size=1000000)
+    return pred_all(X_test, models, batch_size=1000000)
 
 
 # %% [code]
@@ -878,7 +1192,6 @@ building_meta_df.to_feather('building_meta_df_processed.feather')
 # site-0 correction
 
 # %% [code]
-
 # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
 sample_submission.loc[(test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0), 'meter_reading'] = sample_submission[(
     test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0)]['meter_reading'] * 3.4118
@@ -919,15 +1232,15 @@ print('Shape of Sample Submission', sample_submission.shape)
 # %% [code]
 if not debug:
     sample_submission.to_csv(
-        'submission_blend_by_meter-median.csv', index=False, float_format='%.4f')
+        'k_fold_GBM_Final_Final_Submission.csv', index=False, float_format='%.4f')
 
 # %% [code]
 np.log1p(sample_submission['meter_reading']).hist(bins=100)
 # %% [code]
- ## Submission
-! mkdir -p ~/.kaggle/ && \
-  echo '{"username":"joydipbhowmick","key":"5bd4e6a1fec9fc7f8a93def26785a6d2"}' > ~/.kaggle/kaggle.json && \
-  chmod 600 ~/.kaggle/kaggle.json # Create a new direcory use the kaggle token key in that and make it read only to current user.
-! kaggle competitions submit -c ashrae-energy-prediction -f submission_blend_by_meter-median.csv -m "LightGBM blend with site-meter-median"
+# Submission
+! mkdir -p ~/.kaggle / & & \
+    echo '{"username":"joydipbhowmick","key":"5bd4e6a1fec9fc7f8a93def26785a6d2"}' > ~/.kaggle/kaggle.json & & \
+    chmod 600 ~/.kaggle/kaggle.json  # Create a new direcory use the kaggle token key in that and make it read only to current user.
+! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_Final_Final_Submission.csv -m "LightGBM using square feet log1p"
 
 # %% [code]
