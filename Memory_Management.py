@@ -1,26 +1,16 @@
 # %% [code]
 import os
-import random
 import gc
 
-import tqdm
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-from sklearn import preprocessing
-from sklearn.model_selection import KFold
-import lightgbm as lgb
-import xgboost as xgb
-import catboost as cb
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 # %% [code]
 # Copy from https://www.kaggle.com/gemartin/load-data-reduce-memory-usage by @gemartin
 # Modified to support timestamp type
 # Modified to add option to use float16 or not. feather format does not support float16.
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 def reduce_mem_usage(df, use_float16=False):
     """ iterate through all the columns of a dataframe and modify the data type
@@ -71,9 +61,8 @@ def import_data(file):
     return df
 
 
-
 # Read data...
-root = '/home/joydipb/Documents/CMT307-Coursework-2-Group-19'
+root = '/home/joydipb/Documents/CMT307-Coursework-2-Group-19' # Change the Location of the raw of the dataset before run.
 
 train_df = pd.read_csv(os.path.join(root, 'train.csv'))
 weather_train_df = pd.read_csv(os.path.join(root, 'weather_train.csv'))
@@ -86,14 +75,6 @@ train_df['timestamp'] = pd.to_datetime(train_df['timestamp'])
 test_df['timestamp'] = pd.to_datetime(test_df['timestamp'])
 weather_train_df['timestamp'] = pd.to_datetime(weather_train_df['timestamp'])
 weather_test_df['timestamp'] = pd.to_datetime(weather_test_df['timestamp'])
-
-# # categorize primary_use column to reduce memory on merge...
-
-# primary_use_dict = {key: value for value, key in enumerate(primary_use_list)} 
-# print('primary_use_dict: ', primary_use_dict)
-# building_meta_df['primary_use'] = building_meta_df['primary_use'].map(primary_use_dict)
-
-# gc.collect()
 
 reduce_mem_usage(train_df)
 reduce_mem_usage(test_df)
@@ -108,16 +89,8 @@ weather_test_df.to_feather('weather_test.feather')
 building_meta_df.to_feather('building_metadata.feather')
 sample_submission.to_feather('sample_submission.feather')
 
-# train_df = pd.read_feather('train.feather')
-# weather_train_df = pd.read_feather('weather_train.feather')
-# test_df = pd.read_feather('test.feather')
-# weather_test_df = pd.read_feather('weather_test.feather')
-# building_meta_df = pd.read_feather('building_metadata.feather')
-# sample_submission = pd.read_feather('sample_submission.feather')
-
-
 # %% [code]
 
-gc.collect()
+gc.collect() # Garbage Collection
 
 # %%

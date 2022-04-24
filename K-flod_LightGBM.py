@@ -339,7 +339,7 @@ site_0_bids = building_meta_df[building_meta_df.site_id ==
 print(len(site_0_bids), len(
     train_df[train_df.building_id.isin(site_0_bids)].building_id.unique()))
 train_df[train_df.building_id.isin(
-    site_0_bids) & (train_df.meter == 0)].head(50)
+    site_0_bids) & (train_df.meter == 0)].head(10)
 
 # %% [code]
 train_df.loc[(train_df.building_id.isin(site_0_bids)) & (train_df.meter == 0), 'meter_reading'] = train_df[(
@@ -347,7 +347,7 @@ train_df.loc[(train_df.building_id.isin(site_0_bids)) & (train_df.meter == 0), '
 
 # %% [code]
 train_df[(train_df.building_id.isin(site_0_bids))
-         & (train_df.meter == 0)].head(50)
+         & (train_df.meter == 0)].head(10)
 
 # %% [code]
 # Data preprocessing
