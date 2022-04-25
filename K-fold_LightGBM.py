@@ -1,59 +1,37 @@
 # %% [code]
-# v2: 1.102507841834652
-# v9 : del area_floor
-# 10: remove 1099
-# 11: dayweek
-# 12 : del bil_median
-# 13 : leak data update
-# 14 : site-0 unit correction
-# sg filter
 
-# v3 : add diff2 (bug)
-# v4 : add diff2
-# v5 : black 10
-from sklearn.model_selection import GroupKFold, StratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 from scipy.signal import savgol_filter as sg
 import holidays
 from pandas.api.types import is_categorical_dtype
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from sklearn.metrics import mean_squared_error
 import lightgbm as lgb
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import KFold
-from sklearn import preprocessing
-from IPython.core.display import display, HTML
+
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
 import numpy as np  # linear algebra
 from tqdm import tqdm_notebook as tqdm
-import sys
-import random
+
 from pathlib import Path
+
 import os
 import gc
+
 import warnings
+warnings.filterwarnings('ignore')
+
 black_day = 10
-outlier = False
-rescale = False
 
 debug = False
 num_rounds = 200
 
-clip0 = False  # minus meter confirmed in test(site0 leak data)
-
 folds = 3  # 3, 6, 12
-# 6: 1.1069822104487446
-# 3: 1.102507841834652
-# 12: 1.1074824417420517
-
-use_ucf = False
-ucf_clip = False
 
 ucf_year = [2017, 2018]  # ucf data year used in train
 
-predmode = 'all'  # 'valid', train', 'all'
-warnings.filterwarnings('ignore')
+predmode = 'all'  
+
 
 
 # %% [code]
@@ -118,7 +96,7 @@ def set_local(df):
 
 # %% [code]
 
-root = Path('/home/joydipb/Documents/CMT307-Coursework-2-Group-19')
+root = Path('/home/joydipb/Documents/CMT307-Coursework-2-Group-19') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
 train_df = pd.read_feather(root/'train.feather')
 weather_train_df = pd.read_feather(root/'weather_train.feather')
 building_meta_df = pd.read_feather(root/'building_metadata.feather')
@@ -141,14 +119,10 @@ print('Shape of Weather Train Data:', weather_train_df.shape)
 
 # %% [code]
 
-# remove buildings
-
-# train_df = train_df[train_df['building_id'] != 1099]
-
 building_meta_df['floor_area'] = building_meta_df.square_feet / \
     building_meta_df.floor_count
 
-# %%
+# %% [code]
 # Site Specific Holiday
 
 
@@ -188,12 +162,6 @@ add_holiyday(weather_train_df)
 weather_train_df.head()
 
 # %% [code]
-# Removing weired data on site_id 0
-#building_meta_df[building_meta_df.site_id == 0]
-# train_df = train_df.query(
-#     'not (building_id <= 104 & meter == 0 & timestamp <= "2016-05-20")')
-
-# %% [code]
 train_df[train_df.building_id == 954].meter_reading.plot()
 
 # %% [code]
@@ -213,6 +181,7 @@ train_df[train_df.building_id == 954].meter_reading.plot()
 train_df[train_df.building_id == 1221].meter_reading.plot()
 
 # %% [code]
+# Removing buildings with meter == 0 before first initial reading.
 train_df = train_df.query(
     'not (building_id <= 104 & meter == 0 & timestamp <= "2016-05-20 18")')
 train_df = train_df.query(
@@ -444,7 +413,7 @@ train_df = train_df.query(
 train_df = train_df.query(
     'not (building_id != 1227 & building_id != 1281 & building_id != 1314 & building_id >=1223 & building_id < 1335 & meter==0 & meter_reading==0)')
 
-# 4th cleaning (some using hindsight from leaks)
+# 4th cleaning
 train_df = train_df.query(
     'not (building_id >= 1223 & building_id <= 1324 & meter==1 & timestamp > "2016-07-16 04" & timestamp < "2016-07-19 11")')
 train_df = train_df.query(
@@ -595,66 +564,12 @@ train_df = train_df.query(
 train_df = train_df.query(
     'not (building_id >= 1223 & building_id <= 1324 & meter == 3 & timestamp > "2016-08-11 17" & timestamp < "2016-08-12 17")')
 
-# %% [code]
-# Delete Outliear¶
-
-funny_bids = [993, 1168,  904,  954,  778, 1021]
-
-print('before', len(train_df))
-
-if outlier:
-    # 993
-    # or delete
-    train_df.loc[(train_df.building_id == 993) & (train_df.meter == 0) & (
-        train_df.meter_reading > 30000), 'meter_reading'] = 31921
-    train_df.loc[(train_df.building_id == 993) & (train_df.meter == 1) & (
-        train_df.meter_reading > 90000), 'meter_reading'] = 96545.5
-
-    # 1168
-    train_df = train_df[((train_df.building_id == 1168) & (
-        train_df.meter == 0) & (train_df.meter_reading > 10000)) == False]
-
-    # 904
-    train_df.loc[(train_df.building_id == 904) & (train_df.meter == 0) & (
-        train_df.meter_reading > 10000), 'meter_reading'] = 11306
-
-    # 954
-    train_df = train_df[((train_df.building_id == 954) & (
-        train_df.meter_reading > 10000)) == False]
-
-if rescale:
-    # 778 rescale ?
-    train_df.loc[(train_df.building_id == 778) & (train_df.meter == 1), 'meter_reading'] = train_df.loc[(
-        train_df.building_id == 778) & (train_df.meter == 1), 'meter_reading'] / 100
-    #
-    # 1021 rescale ?
-    train_df.loc[(train_df.building_id == 1021) & (train_df.meter == 3), 'meter_reading'] = train_df.loc[(
-        train_df.building_id == 1021) & (train_df.meter == 3), 'meter_reading'] / 1000
-    #plt.plot(np.log1p(train_df.loc[(train_df.building_id == 1021) & (train_df.meter == 3), 'meter_reading'] ))
-
 train_df = train_df.reset_index()
-
 
 print('after', len(train_df))
 gc.collect()
 
 
-# %% [code]
-# for bid in funny_bids:
-#     plt.figure(figsize=[20, 3])
-#     plt.subplot(141)
-#     plt.plot(train_df[(train_df.building_id == bid)
-#              & (train_df.meter == 0)].meter_reading)
-#     plt.subplot(142)
-#     plt.plot(train_df[(train_df.building_id == bid)
-#              & (train_df.meter == 1)].meter_reading)
-#     plt.subplot(143)
-#     plt.plot(train_df[(train_df.building_id == bid)
-#              & (train_df.meter == 2)].meter_reading)
-#     plt.subplot(144)
-#     plt.plot(train_df[(train_df.building_id == bid)
-#              & (train_df.meter == 3)].meter_reading)
-#     plt.title(bid)
 # %% [code]
 # Site-0 Correction¶
 # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
@@ -711,7 +626,6 @@ number of buildings at a siteid.
  """
 # %% [code]
 
-
 def preprocess(df):
     df["hour"] = df["timestamp"].dt.hour
     df["day"] = df["timestamp"].dt.day
@@ -719,26 +633,12 @@ def preprocess(df):
     df["month"] = df["timestamp"].dt.month
     df["dayofweek"] = df["timestamp"].dt.dayofweek
 
-#     hour_rad = df["hour"].values / 24. * 2 * np.pi
-#     df["hour_sin"] = np.sin(hour_rad)
-#     df["hour_cos"] = np.cos(hour_rad)
-
 
 # %% [code]
 preprocess(train_df)
 
 # %% [code]
-# sort train
-if use_ucf:
-    train_df = train_df.sort_values('month')
-    train_df = train_df.reset_index()
-# %% [code]
-#df_group = train_df.groupby('building_id')['meter_reading_log1p']
-#building_median = df_group.median().astype(np.float16)
-#train_df['building_median'] = train_df['building_id'].map(building_median)
-
-# %% [code]
-# Fill Nan value in weather dataframe by interpolation¶
+# Fill Nan value in weather dataframe by interpolation
 weather_train_df.head()
 
 # %% [code]
@@ -756,14 +656,12 @@ weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
 # %% [code]
 weather_train_df = weather_train_df.groupby('site_id').apply(
     lambda group: group.interpolate(method='ffill', limit_direction='forward'))
-#weather_train_df.interpolate(method='ffill', axis=0, limit=None, inplace=False, limit_direction='forward', limit_area=None, downcast=None)
 
 # %% [code]
 weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
 
 # %% [code]
 # Adding some lag feature
-
 
 def add_lag_feature(weather_df, window=3):
     group_df = weather_df.groupby('site_id')
@@ -782,6 +680,7 @@ def add_lag_feature(weather_df, window=3):
 
 
 # %% [code]
+
 add_lag_feature(weather_train_df, window=3)
 add_lag_feature(weather_train_df, window=72)
 
@@ -820,12 +719,6 @@ weather_train_df = reduce_mem_usage(weather_train_df, use_float16=True)
 building_meta_df.head()
 
 # %% [code]
-print('Shape of Train Data:', train_df.shape)
-print('Shape of Building Data:', building_meta_df.shape)
-print('Shape of Weather Train Data:', weather_train_df.shape)
-
-
-# %% [code]
 # SG Filter for Weather
 
 def add_sg(df):
@@ -859,12 +752,8 @@ weather_train_df[weather_train_df.site_id == 2].dew_smooth[:100].plot()
 weather_train_df[weather_train_df.site_id == 0].dew_diff[:100].plot()
 weather_train_df[weather_train_df.site_id == 0].air_diff[:100].plot()
 
-# %% [markdown]
-# For time series data, it is better to consider time-splitting.
-# However just to keep it simple, I am using K-fold cross validation
-
 # %% [code]
-# Train Model
+# Feature Selection
 
 category_cols = ['building_id', 'site_id', 'primary_use',
                  'IsHoliday', 'groupNum_train']  # , 'meter'
@@ -901,6 +790,7 @@ feature_cols = ['square_feet_np_log1p', 'year_built'] + [
  ] 
 
 # %% [code]
+
 train_df = train_df.merge(building_meta_df, on=[
                           'building_id', 'meter'], how='left')
 
@@ -920,10 +810,10 @@ train_df['square_feet_np_log1p'] = np.log1p(train_df['square_feet'])
 train_df = reduce_mem_usage(train_df, use_float16=True)
 
 del weather_train_df
-gc.collect()
+gc.collect() # Copy till here for data preprocessing.
 
 # %% [code]
-
+# Create X_train and y_train
 
 def create_X_y(train_df, groupNum_train):
 
@@ -938,6 +828,7 @@ def create_X_y(train_df, groupNum_train):
 
 # %% [code]
 
+# Define modelling parameters and training model
 
 def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds=1500, lr=0.1, bf=0.1):
     """Train Light GBM model"""
@@ -995,31 +886,13 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
 
 
 # %% [code]
+# Stratified K-flod Cross Validation without shuffling
 seed = 666
 shuffle = False
-#kf = KFold(n_splits=folds, shuffle=shuffle, random_state=seed)
-#kf = GroupKFold(n_splits=folds)
 kf = StratifiedKFold(n_splits=folds)
 
 # %% [markdown]
 # Train model by each group # (site-meter)
-
-# %% [code]
-
-
-def plot_feature_importance(model):
-    importance_df = pd.DataFrame(model[1].feature_importance(),
-                                 index=feature_cols + category_cols,
-                                 columns=['importance']).sort_values('importance')
-    fig, ax = plt.subplots(figsize=(8, 8))
-    importance_df.plot.barh(ax=ax)
-    fig.show()
-
-# %% [code]
-
-
-# Exporting Train Data to use in other models
-train_df.to_feather('train_df_processed.feather')
 
 # %% [code]
 # Traning the Light GBM Model
@@ -1041,8 +914,7 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
     train_df_site = train_df[train_df['groupNum_train']
                              == groupNum_train].copy()
 
-    # for train_idx, valid_idx in kf.split(X_train, y_train):
-    # for train_idx, valid_idx in kf.split(X_train, y_train, groups=get_groups(train_df, groupNum_train)):
+    
     for train_idx, valid_idx in kf.split(train_df_site, train_df_site['building_id']):
         train_data = X_train.iloc[train_idx, :], y_train[train_idx]
         valid_data = X_train.iloc[valid_idx, :], y_train[valid_idx]
@@ -1051,11 +923,11 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
         print(mindex)
 
         print('train', len(train_idx), 'valid', len(valid_idx))
-    #     model, y_pred_valid, log = fit_cb(train_data, valid_data, cat_features=cat_features, devices=[0,])
+    
         model, y_pred_valid, log = fit_lgbm(train_data, valid_data, cat_features=category_cols,
                                             num_rounds=num_rounds, lr=0.05, bf=0.7)
         y_valid_pred_total[valid_idx] = y_pred_valid
-        #plot_feature_importance(model)
+    
         exec('models' + str(groupNum_train) + '.append([mindex, model])')
         gc.collect()
         if debug:
@@ -1119,6 +991,7 @@ gc.collect()
 
 
 # %% [code]
+
 sample_submission = pd.read_feather(
     os.path.join(root, 'sample_submission.feather'))
 reduce_mem_usage(sample_submission)
@@ -1126,7 +999,7 @@ reduce_mem_usage(sample_submission)
 print(sample_submission.shape)
 
 # %% [code]
-
+# Create X_test and y_test
 
 def create_X(test_df, groupNum_train):
 
@@ -1141,7 +1014,7 @@ def create_X(test_df, groupNum_train):
     return X_test
 
 # %% [code]
-
+## Run a loop to merge data groupNum_train wise and define model prediction.
 
 def pred_all(X_test, models, batch_size=1000000):
     iterations = (X_test.shape[0] + batch_size - 1) // batch_size
@@ -1164,6 +1037,7 @@ def pred(X_test, models, batch_size=1000000):
 
 
 # %% [code]
+# Call Model prediction
 for groupNum_train in building_meta_df['groupNum_train'].unique():
     print('groupNum_train: ', groupNum_train)
     X_test = create_X(test_df, groupNum_train=groupNum_train)
@@ -1181,13 +1055,6 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
     del X_test, y_test
     gc.collect()
 
-# %% [code]
-# Exporting Test data, building metadata, and weather data after preprocessing
-# To be used in other models.
-test_df.to_feather('test_df_processed.feather')
-weather_test_df.to_feather('weather_test_df_processed.feather')
-building_meta_df.to_feather('building_meta_df_processed.feather')
-
 # %% [markdown]
 # site-0 correction
 
@@ -1195,29 +1062,6 @@ building_meta_df.to_feather('building_meta_df_processed.feather')
 # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
 sample_submission.loc[(test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0), 'meter_reading'] = sample_submission[(
     test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0)]['meter_reading'] * 3.4118
-
-
-# %% [code]
-if rescale:
-    sample_submission.loc[(test_df.building_id == 778) & (test_df.meter == 1), 'meter_reading'] = 100 * \
-        sample_submission.loc[(test_df.building_id == 778) & (
-            test_df.meter == 1), 'meter_reading']
-    sample_submission.loc[(test_df.building_id == 1021) & (test_df.meter == 3), 'meter_reading'] = 1000 * \
-        sample_submission.loc[(test_df.building_id == 1021) & (
-            test_df.meter == 3), 'meter_reading']
-
-    plt.figure()
-    plt.subplot(211)
-    sample_submission.loc[(test_df.building_id == 778) & (
-        test_df.meter == 1), 'meter_reading'].plot()
-    plt.subplot(212)
-    sample_submission.loc[(test_df.building_id == 1021) & (
-        test_df.meter == 3), 'meter_reading'].plot()
-
-# %% [code]
-if clip0:
-    sample_submission.loc[sample_submission.meter_reading <
-                          0, 'meter_reading'] = 0
 
 
 # %% [code]
@@ -1232,15 +1076,19 @@ print('Shape of Sample Submission', sample_submission.shape)
 # %% [code]
 if not debug:
     sample_submission.to_csv(
-        'k_fold_GBM_Final_Final_Submission.csv', index=False, float_format='%.4f')
+        'k_fold_GBM_Final_Submission.csv', index=False, float_format='%.4f')
 
 # %% [code]
+# Histogram of submission file. 
 np.log1p(sample_submission['meter_reading']).hist(bins=100)
-# %% [code]
-# Submission
-! mkdir -p ~/.kaggle / & & \
-    echo '{"username":"joydipbhowmick","key":"5bd4e6a1fec9fc7f8a93def26785a6d2"}' > ~/.kaggle/kaggle.json & & \
-    chmod 600 ~/.kaggle/kaggle.json  # Create a new direcory use the kaggle token key in that and make it read only to current user.
-! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_Final_Final_Submission.csv -m "LightGBM using square feet log1p"
 
 # %% [code]
+# Submission on kaggle
+! mkdir -p ~/.kaggle / && \
+    echo '{"username":"joydipbhowmick","key":"5bd4e6a1fec9fc7f8a93def26785a6d2"}' > ~/.kaggle/kaggle.json && \
+    chmod 600 ~/.kaggle/kaggle.json  # Create a new direcory use the kaggle token key in that and make it read only to current user.
+! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_Final_Submission.csv -m "Pre-submission Final Check"
+
+
+
+# %%
