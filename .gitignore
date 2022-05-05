@@ -1,0 +1,8 @@
+*.csv
+*.zip
+*.feather
+*.pickle
+*.png
+*.pb
+*.data-00000-of-00001
+*.index
