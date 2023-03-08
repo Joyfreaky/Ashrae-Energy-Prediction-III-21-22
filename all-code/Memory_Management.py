@@ -62,7 +62,7 @@ def import_data(file):
 
 
 # Read data...
-root = '/home/joydipb/Documents/CMT307-Coursework-2-Group-19' # Change the Location of the raw of the dataset before run.
+root = '/workspace/CMT307-Coursework-2-Group-19/all-code' # Change the Location of the raw of the dataset before run.
 
 train_df = pd.read_csv(os.path.join(root, 'train.csv'))
 weather_train_df = pd.read_csv(os.path.join(root, 'weather_train.csv'))
@@ -92,5 +92,6 @@ sample_submission.to_feather('sample_submission.feather')
 # %% [code]
 
 gc.collect() # Garbage Collection
+
 
 # %%

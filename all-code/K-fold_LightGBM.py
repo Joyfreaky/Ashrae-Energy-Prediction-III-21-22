@@ -1,5 +1,8 @@
 # %% [code]
+# Install all the requirements if not running in colab
+! pip install -r requirements.txt
 
+# %% [code]
 from sklearn.model_selection import StratifiedKFold
 from scipy.signal import savgol_filter as sg
 import holidays
@@ -96,7 +99,7 @@ def set_local(df):
 
 # %% [code]
 
-root = Path('/home/joydipb/Documents/CMT307-Coursework-2-Group-19') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
+root = Path('/workspace/CMT307-Coursework-2-Group-19/all-code') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
 train_df = pd.read_feather(root/'train.feather')
 weather_train_df = pd.read_feather(root/'weather_train.feather')
 building_meta_df = pd.read_feather(root/'building_metadata.feather')
@@ -126,7 +129,7 @@ building_meta_df['floor_area'] = building_meta_df.square_feet / \
 # Site Specific Holiday
 
 
-en_holidays = holidays.England()
+en_holidays = holidays.UK()
 ir_holidays = holidays.Ireland()
 ca_holidays = holidays.Canada()
 us_holidays = holidays.UnitedStates()
@@ -888,7 +891,7 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
 # %% [code]
 # Stratified K-flod Cross Validation without shuffling
 seed = 666
-shuffle = False
+shuffle = False # Try with shuffling as well and check accuracy
 kf = StratifiedKFold(n_splits=folds)
 
 # %% [markdown]
@@ -1031,7 +1034,6 @@ def pred_all(X_test, models, batch_size=1000000):
     y_test_pred_total /= len(models)
     return y_test_pred_total
 
-
 def pred(X_test, models, batch_size=1000000):
     return pred_all(X_test, models, batch_size=1000000)
 
@@ -1076,7 +1078,7 @@ print('Shape of Sample Submission', sample_submission.shape)
 # %% [code]
 if not debug:
     sample_submission.to_csv(
-        'k_fold_GBM_Final_Submission.csv', index=False, float_format='%.4f')
+        'k_fold_GBM_test_Submission.csv', index=False, float_format='%.4f')
 
 # %% [code]
 # Histogram of submission file. 
@@ -1085,9 +1087,9 @@ np.log1p(sample_submission['meter_reading']).hist(bins=100)
 # %% [code]
 # Submission on kaggle
 ! mkdir -p ~/.kaggle / && \
-    echo '{"username":"joydipbhowmick","key":"5bd4e6a1fec9fc7f8a93def26785a6d2"}' > ~/.kaggle/kaggle.json && \
+    echo '{"username":"joydipbhowmick","key":"8ccf569cd07c20ae28c251793a21c645"}' > ~/.kaggle/kaggle.json && \
     chmod 600 ~/.kaggle/kaggle.json  # Create a new direcory use the kaggle token key in that and make it read only to current user.
-! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_Final_Submission.csv -m "Pre-submission Final Check"
+! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_test_Submission.csv -m "First test Submission 22/23"
 
 
 
