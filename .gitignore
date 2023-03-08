@@ -6,3 +6,8 @@
 *.pb
 *.data-00000-of-00001
 *.index
+*.html
+*.pdf
+*.docx
+
+
