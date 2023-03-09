@@ -1,9 +1,6 @@
 # %% [code]
-# Install all the requirements if not running in colab
-! pip install -r requirements.txt
-
-# %% [code]
-from sklearn.model_selection import StratifiedKFold
+print("Importing libraries...")
+from sklearn.model_selection import StratifiedKFold 
 from scipy.signal import savgol_filter as sg
 import holidays
 from pandas.api.types import is_categorical_dtype
@@ -24,20 +21,42 @@ import gc
 import warnings
 warnings.filterwarnings('ignore')
 
+
+# %% [code]
+print("Declaring global variables...")
+
 black_day = 10
+outlier = False
+rescale = False
 
 debug = False
 num_rounds = 200
 
+clip0=False
+
 folds = 3  # 3, 6, 12
+# 3:
+# 6:
+# 12:
+
+use_ucf=False
+ucf_clip=False
 
 ucf_year = [2017, 2018]  # ucf data year used in train
 
-predmode = 'all'  
+predmode = 'all'  # 'valid', 'train', 'all'
 
+zone_dict = {0: 4, 1: 0, 2: 7, 3: 4, 4: 7, 5: 0, 6: 4, 7: 4,
+             8: 4, 9: 5, 10: 7, 11: 4, 12: 0, 13: 5, 14: 4, 15: 4} 
 
+# Site Specific Holidays
+en_holidays = holidays.UK()
+ir_holidays = holidays.Ireland()
+ca_holidays = holidays.Canada()
+us_holidays = holidays.UnitedStates()
 
 # %% [code]
+print("Declaring functions...")
 # Original code from https://www.kaggle.com/gemartin/load-data-reduce-memory-usage by @gemartin
 # Modified to support timestamp type, categorical type
 # Modified to add option to use float16 or not. feather format does not support float16.
@@ -85,12 +104,6 @@ def reduce_mem_usage(df, use_float16=False):
 
     return df
 
-
-# %%[code]
-zone_dict = {0: 4, 1: 0, 2: 7, 3: 4, 4: 7, 5: 0, 6: 4, 7: 4,
-             8: 4, 9: 5, 10: 7, 11: 4, 12: 0, 13: 5, 14: 4, 15: 4}
-
-
 def set_local(df):
     for sid, zone in zone_dict.items():
         sids = df.site_id == sid
@@ -98,19 +111,28 @@ def set_local(df):
 
 
 # %% [code]
+print("Importing data...")
 
 root = Path('/workspace/CMT307-Coursework-2-Group-19/all-code') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
 train_df = pd.read_feather(root/'train.feather')
 weather_train_df = pd.read_feather(root/'weather_train.feather')
 building_meta_df = pd.read_feather(root/'building_metadata.feather')
 
+# %% [code]
+print("Merging data...")
+
 building_meta_df = building_meta_df.merge(
     train_df[['building_id', 'meter']].drop_duplicates(), on='building_id')
 
+# %% [code]
+print("Adding features...")
 # Set group  (site-meter) for training models
-
 building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype(
     'int')*10 + building_meta_df['meter'].astype('int')
+
+building_meta_df['floor_area'] = building_meta_df.square_feet / \
+    building_meta_df.floor_count
+
 
 building_meta_df
 
@@ -119,20 +141,12 @@ print('Shape of Train Data:', train_df.shape)
 print('Shape of Building Data:', building_meta_df.shape)
 print('Shape of Weather Train Data:', weather_train_df.shape)
 
-
 # %% [code]
 
-building_meta_df['floor_area'] = building_meta_df.square_feet / \
-    building_meta_df.floor_count
-
-# %% [code]
-# Site Specific Holiday
 
 
-en_holidays = holidays.UK()
-ir_holidays = holidays.Ireland()
-ca_holidays = holidays.Canada()
-us_holidays = holidays.UnitedStates()
+
+
 
 
 def add_holiyday(df_weather):
