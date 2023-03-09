@@ -1,22 +1,30 @@
 # %% [code]
 print("Importing libraries...")
 from sklearn.model_selection import StratifiedKFold 
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import LabelEncoder
 from scipy.signal import savgol_filter as sg
-import holidays
-from pandas.api.types import is_categorical_dtype
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
 import lightgbm as lgb
+
+import holidays
+
+from IPython.core.display import display, HTML
 
 import seaborn as sns
 import matplotlib.pyplot as plt
+
 import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
 import numpy as np  # linear algebra
 from tqdm import tqdm_notebook as tqdm
 
-from pathlib import Path
+from pandas.api.types import is_categorical_dtype
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 import os
 import gc
+import sys
+import random
+from pathlib import Path
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -108,46 +116,7 @@ def set_local(df):
     for sid, zone in zone_dict.items():
         sids = df.site_id == sid
         df.loc[sids, 'timestamp'] = df[sids].timestamp - pd.offsets.Hour(zone)
-
-
-# %% [code]
-print("Importing data...")
-
-root = Path('/workspace/CMT307-Coursework-2-Group-19/all-code') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
-train_df = pd.read_feather(root/'train.feather')
-weather_train_df = pd.read_feather(root/'weather_train.feather')
-building_meta_df = pd.read_feather(root/'building_metadata.feather')
-
-# %% [code]
-print("Merging data...")
-
-building_meta_df = building_meta_df.merge(
-    train_df[['building_id', 'meter']].drop_duplicates(), on='building_id')
-
-# %% [code]
-print("Adding features...")
-# Set group  (site-meter) for training models
-building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype(
-    'int')*10 + building_meta_df['meter'].astype('int')
-
-building_meta_df['floor_area'] = building_meta_df.square_feet / \
-    building_meta_df.floor_count
-
-
-building_meta_df
-
-# %% [code]
-print('Shape of Train Data:', train_df.shape)
-print('Shape of Building Data:', building_meta_df.shape)
-print('Shape of Weather Train Data:', weather_train_df.shape)
-
-# %% [code]
-
-
-
-
-
-
+    return df
 
 def add_holiyday(df_weather):
     en_idx = df_weather.query('site_id == 1 or site_id == 5').index
@@ -169,14 +138,49 @@ def add_holiyday(df_weather):
     holiday_idx = df_weather['IsHoliday'] != 0
     df_weather.loc[holiday_idx, 'IsHoliday'] = 1
     df_weather['IsHoliday'] = df_weather['IsHoliday'].astype(np.uint8)
+
+    return df_weather
+
+
+
 # %% [code]
+print("Importing data...")
 
-
-set_local(weather_train_df)
-add_holiyday(weather_train_df)
+root = Path('/workspace/CMT307-Coursework-2-Group-19/all-code') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
+train_df = pd.read_feather(root/'train.feather')
+weather_train_df = pd.read_feather(root/'weather_train.feather')
+building_meta_df = pd.read_feather(root/'building_metadata.feather')
 
 # %% [code]
-weather_train_df.head()
+print("Merging data...")
+
+building_meta_df = building_meta_df.merge(
+    train_df[['building_id', 'meter']].drop_duplicates(), on='building_id')
+
+# %% [code]
+print("Adding features...")
+# Set group  (site-meter) for training models
+building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype(
+    'int')*10 + building_meta_df['meter'].astype('int') # Add group number
+
+building_meta_df['floor_area'] = building_meta_df.square_feet / \
+    building_meta_df.floor_count # Add floor area
+
+
+set_local(weather_train_df) # Set local time
+
+add_holiyday(weather_train_df) # Add holiday
+
+building_meta_df
+
+# %% [code]
+print('Shape of Train Data:', train_df.shape)
+print('Shape of Building Data:', building_meta_df.shape)
+print('Shape of Weather Train Data:', weather_train_df.shape)
+
+
+# %% [Markdown]
+# ## Data Cleaning
 
 # %% [code]
 train_df[train_df.building_id == 954].meter_reading.plot()
@@ -318,7 +322,10 @@ train_df = train_df.query(
 train_df = train_df.query(
     'not (building_id == 1322 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
 
-# 2nd cleaning
+# %% [Markdown] 
+    # ## Remove outliers
+
+# %% [code] {"scrolled":true}
 train_df = train_df.query(
     'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-10-14 22" & timestamp < "2016-10-17 08")')
 train_df = train_df.query(
@@ -398,6 +405,9 @@ train_df = train_df.query(
 train_df = train_df.query(
     'not (building_id >= 774 & building_id <= 787 & meter == 1 & timestamp > "2016-10-05 01" & timestamp < "2016-10-10 09")')
 
+# %% [Markdown]
+# ## 2.2. Remove outliers
+# %% [code] {"scrolled":true}
 # 3rd cleaning hourly spikes
 train_df = train_df.query(
     'not (building_id >= 874 & building_id <= 997 & meter == 0 & timestamp > "2016-05-11 09" & timestamp < "2016-05-12 01")')
@@ -430,7 +440,8 @@ train_df = train_df.query(
 train_df = train_df.query(
     'not (building_id != 1227 & building_id != 1281 & building_id != 1314 & building_id >=1223 & building_id < 1335 & meter==0 & meter_reading==0)')
 
-# 4th cleaning
+# %% [Markdown]
+# ## 2.3. Remove missing values
 train_df = train_df.query(
     'not (building_id >= 1223 & building_id <= 1324 & meter==1 & timestamp > "2016-07-16 04" & timestamp < "2016-07-19 11")')
 train_df = train_df.query(
@@ -584,31 +595,34 @@ train_df = train_df.query(
 train_df = train_df.reset_index()
 
 print('after', len(train_df))
+
 gc.collect()
 
-
 # %% [code]
-# Site-0 Correction¶
+print('Site 0 buildings: Correcting meter readings for meter 0 .....')
 # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
 site_0_bids = building_meta_df[building_meta_df.site_id ==
                                0].building_id.unique()
+
 print(len(site_0_bids), len(
-    train_df[train_df.building_id.isin(site_0_bids)].building_id.unique()))
+    train_df[train_df.building_id.isin(site_0_bids)].building_id.unique())) 
+print("Before correction:")
 train_df[train_df.building_id.isin(
     site_0_bids) & (train_df.meter == 0)].head(10)
 
-# %% [code]
 train_df.loc[(train_df.building_id.isin(site_0_bids)) & (train_df.meter == 0), 'meter_reading'] = train_df[(
     train_df.building_id.isin(site_0_bids)) & (train_df.meter == 0)]['meter_reading'] * 0.2931
 
-# %% [code]
+print("After correction:")
 train_df[(train_df.building_id.isin(site_0_bids))
          & (train_df.meter == 0)].head(10)
 
 # %% [code]
-# Data preprocessing
 
+print("Add timestamp features...")
 train_df['date'] = train_df['timestamp'].dt.date
+
+print("Log transform of meter_reading...")
 train_df['meter_reading_log1p'] = np.log1p(train_df['meter_reading'])
 
 # %% [markdown]
