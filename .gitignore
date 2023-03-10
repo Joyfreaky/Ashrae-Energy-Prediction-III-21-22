@@ -11,5 +11,6 @@
 *.docx
 *.pickle
 *.pkl 
-
+*.pickle
+*.pkl 
 
