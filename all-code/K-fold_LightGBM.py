@@ -33,22 +33,23 @@ warnings.filterwarnings('ignore')
 # %% [code]
 print("Declaring global variables...")
 
+win = 3  # 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31
 black_day = 10
-outlier = False
-rescale = False
+outlier = True
+rescale = True
 
-debug = False
+debug = True
 num_rounds = 200
 
-clip0=False
+clip0=True
 
 folds = 3  # 3, 6, 12
 # 3:
 # 6:
 # 12:
 
-use_ucf=False
-ucf_clip=False
+use_ucf=True
+ucf_clip=True
 
 ucf_year = [2017, 2018]  # ucf data year used in train
 
@@ -116,7 +117,7 @@ def set_local(df):
     for sid, zone in zone_dict.items():
         sids = df.site_id == sid
         df.loc[sids, 'timestamp'] = df[sids].timestamp - pd.offsets.Hour(zone)
-    return df
+    
 
 def add_holiyday(df_weather):
     en_idx = df_weather.query('site_id == 1 or site_id == 5').index
@@ -139,7 +140,47 @@ def add_holiyday(df_weather):
     df_weather.loc[holiday_idx, 'IsHoliday'] = 1
     df_weather['IsHoliday'] = df_weather['IsHoliday'].astype(np.uint8)
 
-    return df_weather
+def preprocess(df):
+    df["hour"] = df["timestamp"].dt.hour
+    df["day"] = df["timestamp"].dt.day
+    df["weekend"] = df["timestamp"].dt.weekday
+    df["month"] = df["timestamp"].dt.month
+    df["dayofweek"] = df["timestamp"].dt.dayofweek
+
+# Adding some lag feature
+
+def add_lag_feature(weather_df, window=3):
+    group_df = weather_df.groupby('site_id')
+    cols = ['air_temperature', 'cloud_coverage', 'dew_temperature',
+            'precip_depth_1_hr', 'sea_level_pressure', 'wind_direction', 'wind_speed']
+    rolled = group_df[cols].rolling(window=window, min_periods=0)
+    lag_mean = rolled.mean().reset_index().astype(np.float16)
+    lag_max = rolled.max().reset_index().astype(np.float16)
+    lag_min = rolled.min().reset_index().astype(np.float16)
+    lag_std = rolled.std().reset_index().astype(np.float16)
+    for col in cols:
+        weather_df[f'{col}_mean_lag{window}'] = lag_mean[col]
+        weather_df[f'{col}_max_lag{window}'] = lag_max[col]
+        weather_df[f'{col}_min_lag{window}'] = lag_min[col]
+        weather_df[f'{col}_std_lag{window}'] = lag_std[col]
+
+# SG Filter for Weather
+
+def add_sg(df):
+    w = 11
+    p = 2
+    for si in df.site_id.unique():
+        index = df.site_id == si
+        df.loc[index, 'air_smooth'] = sg(df[index].air_temperature, w, p)
+        df.loc[index, 'dew_smooth'] = sg(df[index].dew_temperature, w, p)
+
+        df.loc[index, 'air_diff'] = sg(df[index].air_temperature, w, p, 1)
+        df.loc[index, 'dew_diff'] = sg(df[index].dew_temperature, w, p, 1)
+
+        df.loc[index, 'air_diff2'] = sg(df[index].air_temperature, w, p, 2)
+        df.loc[index, 'dew_diff2'] = sg(df[index].dew_temperature, w, p, 2)
+
+
 
 
 
@@ -171,14 +212,12 @@ set_local(weather_train_df) # Set local time
 
 add_holiyday(weather_train_df) # Add holiday
 
-building_meta_df
-
 # %% [code]
 print('Shape of Train Data:', train_df.shape)
 print('Shape of Building Data:', building_meta_df.shape)
 print('Shape of Weather Train Data:', weather_train_df.shape)
 
-
+ 
 # %% [Markdown]
 # ## Data Cleaning
 
@@ -202,7 +241,7 @@ train_df[train_df.building_id == 954].meter_reading.plot()
 train_df[train_df.building_id == 1221].meter_reading.plot()
 
 # %% [code]
-# Removing buildings with meter == 0 before first initial reading.
+# Removing buildings with meter == 0 which has zero reading, before first initial reading.
 train_df = train_df.query(
     'not (building_id <= 104 & meter == 0 & timestamp <= "2016-05-20 18")')
 train_df = train_df.query(
@@ -594,9 +633,10 @@ train_df = train_df.query(
 
 train_df = train_df.reset_index()
 
-print('after', len(train_df))
+print('after', len(train_df)) 
 
 gc.collect()
+
 
 # %% [code]
 print('Site 0 buildings: Correcting meter readings for meter 0 .....')
@@ -612,12 +652,13 @@ train_df[train_df.building_id.isin(
 
 train_df.loc[(train_df.building_id.isin(site_0_bids)) & (train_df.meter == 0), 'meter_reading'] = train_df[(
     train_df.building_id.isin(site_0_bids)) & (train_df.meter == 0)]['meter_reading'] * 0.2931
-
+# %% [code]
 print("After correction:")
 train_df[(train_df.building_id.isin(site_0_bids))
          & (train_df.meter == 0)].head(10)
 
 # %% [code]
+# Add timestamp features and log transform of meter_reading
 
 print("Add timestamp features...")
 train_df['date'] = train_df['timestamp'].dt.date
@@ -625,93 +666,84 @@ train_df['date'] = train_df['timestamp'].dt.date
 print("Log transform of meter_reading...")
 train_df['meter_reading_log1p'] = np.log1p(train_df['meter_reading'])
 
-# %% [markdown]
-""" # Add time feature¶
+# %% [Markdown]
+## Add time feature
 
-Some features introduced in https://www.kaggle.com/ryches/simple-lgbm-solution by @ryches
-Features that are likely predictive:
+"""Some features introduced in https://www.kaggle.com/ryches/simple-lgbm-solution by @ryches
+Features that are likely predictive:"""
 
-Buildings:-
+#Buildings:-
 
-primary_use,
-square_feet,
-year_built,
-floor_count (may be too sparse to use),
-Weather,
+#primary_use,
+#square_feet,
+#year_built,
+#floor_count (may be too sparse to use),
+#Weather,
 
-time of day :-
-holiday,
-weekend,
-cloud_coverage + lags,
-dew_temperature + lags,
-precip_depth + lags,
-sea_level_pressure + lags,
-wind_direction + lags,
-wind_speed + lags,
+#time of day :-
+#holiday,
+#weekend,
+#cloud_coverage + lags,
+#dew_temperature + lags,
+#precip_depth + lags,
+#sea_level_pressure + lags,
+#wind_direction + lags,
+#wind_speed + lags,
 
-Train:-
+#Train:-
 
-max, mean, min, std of the specific building historically,
-number of meters,
-number of buildings at a siteid.
- """
-# %% [code]
-
-def preprocess(df):
-    df["hour"] = df["timestamp"].dt.hour
-    df["day"] = df["timestamp"].dt.day
-    df["weekend"] = df["timestamp"].dt.weekday
-    df["month"] = df["timestamp"].dt.month
-    df["dayofweek"] = df["timestamp"].dt.dayofweek
-
+#max, mean, min, std of the specific building historically,
+#number of meters,
+#number of buildings at a siteid.
 
 # %% [code]
+# Preprocessing time features
+print("Add time features...")
 preprocess(train_df)
 
 # %% [code]
+# Sort Train Data
+print("Sorting Training Data...")
+if use_ucf:
+    train_df = train_df.sort_values('month')
+    train_df = train_df.reset_index(drop=True)
+# %% [code]
 # Fill Nan value in weather dataframe by interpolation
+print("Fill Nan value in weather dataframe by interpolation...")
 weather_train_df.head()
 
 # %% [code]
 weather_train_df.describe()
 
 # %% [code]
+print("Before interpolation:")
 weather_train_df.isna().sum()
 
 # %% [code]
+print("Shape before interpolation:")
 weather_train_df.shape
 
 # %% [code]
+print("Group by site_id Missing values before interpolation:")
 weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
 
 # %% [code]
+print("Interpolate missing values...")
 weather_train_df = weather_train_df.groupby('site_id').apply(
     lambda group: group.interpolate(method='ffill', limit_direction='forward'))
 
 # %% [code]
+print("After interpolation:")
 weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
 
 # %% [code]
-# Adding some lag feature
-
-def add_lag_feature(weather_df, window=3):
-    group_df = weather_df.groupby('site_id')
-    cols = ['air_temperature', 'cloud_coverage', 'dew_temperature',
-            'precip_depth_1_hr', 'sea_level_pressure', 'wind_direction', 'wind_speed']
-    rolled = group_df[cols].rolling(window=window, min_periods=0)
-    lag_mean = rolled.mean().reset_index().astype(np.float16)
-    lag_max = rolled.max().reset_index().astype(np.float16)
-    lag_min = rolled.min().reset_index().astype(np.float16)
-    lag_std = rolled.std().reset_index().astype(np.float16)
-    for col in cols:
-        weather_df[f'{col}_mean_lag{window}'] = lag_mean[col]
-        weather_df[f'{col}_max_lag{window}'] = lag_max[col]
-        weather_df[f'{col}_min_lag{window}'] = lag_min[col]
-        weather_df[f'{col}_std_lag{window}'] = lag_std[col]
-
+# Checking how many data points in each site_id 
+print("Checking how many data points in each site_id...")
+weather_train_df.groupby('site_id').apply(lambda group: group.shape)
 
 # %% [code]
-
+print(  
+    "Add lag features for weather data...")
 add_lag_feature(weather_train_df, window=3)
 add_lag_feature(weather_train_df, window=72)
 
@@ -722,11 +754,8 @@ weather_train_df.head()
 weather_train_df.columns
 
 # %% [code]
-weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
-
-# %% [code]
 # count encoding
-
+print("Count encoding...")
 year_map = building_meta_df.year_built.value_counts()
 building_meta_df['year_cnt'] = building_meta_df.year_built.map(year_map)
 
@@ -734,6 +763,7 @@ bid_map = train_df.building_id.value_counts()
 train_df['bid_cnt'] = train_df.building_id.map(bid_map)
 # %% [code]
 # categorize primary_use column to reduce memory on merge...
+print("Categorize primary_use column to reduce memory on merge...")
 
 primary_use_list = building_meta_df['primary_use'].unique()
 primary_use_dict = {key: value for value, key in enumerate(primary_use_list)}
@@ -742,35 +772,20 @@ building_meta_df['primary_use'] = building_meta_df['primary_use'].map(
     primary_use_dict)
 
 gc.collect()
+
 # %% [code]
+# Reduce memory usage
+print("Reduce memory usage...")
 train_df = reduce_mem_usage(train_df, use_float16=True)
 building_meta_df = reduce_mem_usage(building_meta_df, use_float16=True)
 weather_train_df = reduce_mem_usage(weather_train_df, use_float16=True)
-# %% [code]
-building_meta_df.head()
 
 # %% [code]
-# SG Filter for Weather
-
-def add_sg(df):
-    w = 11
-    p = 2
-    for si in df.site_id.unique():
-        index = df.site_id == si
-        df.loc[index, 'air_smooth'] = sg(df[index].air_temperature, w, p)
-        df.loc[index, 'dew_smooth'] = sg(df[index].dew_temperature, w, p)
-
-        df.loc[index, 'air_diff'] = sg(df[index].air_temperature, w, p, 1)
-        df.loc[index, 'dew_diff'] = sg(df[index].dew_temperature, w, p, 1)
-
-        df.loc[index, 'air_diff2'] = sg(df[index].air_temperature, w, p, 2)
-        df.loc[index, 'dew_diff2'] = sg(df[index].dew_temperature, w, p, 2)
-
-
-# %% [code]
-
+print("Smoothing...")
 add_sg(weather_train_df)
 
+# %% [Markdown]
+# # Plotting smoothed data
 
 # %% [code]
 weather_train_df[weather_train_df.site_id == 1].air_temperature[:100].plot()
@@ -790,21 +805,20 @@ category_cols = ['building_id', 'site_id', 'primary_use',
                  'IsHoliday', 'groupNum_train']  # , 'meter'
 feature_cols = ['square_feet_np_log1p', 'year_built'] + [
     'hour', 'weekend',
-    #    'day', # 'month' ,
-    #    'dayofweek',
-    #    'building_median'
-    #    'square_feet'
+        'day',  'month' ,
+        'dayofweek',
+        'square_feet'
 ] + [
     'air_temperature', 'cloud_coverage',
     'dew_temperature', 'precip_depth_1_hr',
     'sea_level_pressure',
-    #'wind_direction', 'wind_speed',
+    'wind_direction', 'wind_speed',
     'air_temperature_mean_lag72',
     'air_temperature_max_lag72', 'air_temperature_min_lag72',
     'air_temperature_std_lag72', 'cloud_coverage_mean_lag72',
     'dew_temperature_mean_lag72', 'precip_depth_1_hr_mean_lag72',
     'sea_level_pressure_mean_lag72',
-    # 'wind_direction_mean_lag72',
+    'wind_direction_mean_lag72',
     'wind_speed_mean_lag72',
     'air_temperature_mean_lag3',
     'air_temperature_max_lag3',
@@ -812,8 +826,8 @@ feature_cols = ['square_feet_np_log1p', 'year_built'] + [
     'dew_temperature_mean_lag3',
     'precip_depth_1_hr_mean_lag3',
     'sea_level_pressure_mean_lag3',
-    #    'wind_direction_mean_lag3', 'wind_speed_mean_lag3',
-    #    'floor_area',
+    'wind_direction_mean_lag3', 'wind_speed_mean_lag3',
+    'floor_area',
     'year_cnt', 'bid_cnt',
     'dew_smooth', 'air_smooth',
     'dew_diff', 'air_diff',
@@ -821,12 +835,18 @@ feature_cols = ['square_feet_np_log1p', 'year_built'] + [
  ] 
 
 # %% [code]
+# Colums in train_df
+train_df.columns
+# %% [code]
+# Colums in building_meta_df
+building_meta_df.columns
+# %% [code]
+
+print("Merge dataframes...")
 
 train_df = train_df.merge(building_meta_df, on=[
                           'building_id', 'meter'], how='left')
-
 # %% [code]
-
 train_df = reduce_mem_usage(train_df, use_float16=True)
 weather_train_df = reduce_mem_usage(weather_train_df, use_float16=True)
 # %% [code]
@@ -834,14 +854,27 @@ train_df = train_df.merge(weather_train_df, on=[
                           'site_id', 'timestamp'], how='left')
 
 # %% [code]
-
+print("Log transform features...")
 train_df['square_feet_np_log1p'] = np.log1p(train_df['square_feet'])
 
 # %% [code]
 train_df = reduce_mem_usage(train_df, use_float16=True)
-
-del weather_train_df
 gc.collect() # Copy till here for data preprocessing.
+
+# %% [code]
+# Delete unnecessary dataframes to free up memory
+#del building_meta_df
+del weather_train_df
+gc.collect()
+
+# %% [code]
+# Save preprocessed data
+train_df.to_pickle('train_df.pkl')
+
+
+
+# %% [code]
+### Model Implementation and Training
 
 # %% [code]
 # Create X_train and y_train
@@ -868,16 +901,16 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
     metric = 'rmse'
     params = {'num_leaves': 31,
               'objective': 'regression',
-              #               'max_depth': -1,
+              'max_depth': -1,
               'learning_rate': lr,
               "boosting": "gbdt",
               "bagging_freq": 5,
               "bagging_fraction": bf,
               "feature_fraction": 0.9,
               "metric": metric,
-              #               "verbosity": -1,
-              #               'reg_alpha': 0.1,
-              #               'reg_lambda': 0.3
+              "verbosity": -1,
+              'reg_alpha': 0.1,
+              'reg_lambda': 0.3
               }
     device = devices[0]
     if device == -1:
@@ -917,17 +950,28 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
 
 
 # %% [code]
-# Stratified K-flod Cross Validation without shuffling
-seed = 666
-shuffle = False # Try with shuffling as well and check accuracy
+# Stratified K-flod Cross Validation with shuffling
+seed = 21099797
+shuffle = True # Try with shuffling as well and check accuracy
 kf = StratifiedKFold(n_splits=folds)
 
 # %% [markdown]
 # Train model by each group # (site-meter)
 
 # %% [code]
-# Traning the Light GBM Model
-gc.collect()
+def plot_feature_importance(model, feature_cols):
+    """Plot feature importance"""
+    feature_importance_df = pd.DataFrame()
+    feature_importance_df['feature'] = feature_cols
+    feature_importance_df['importance'] = model.feature_importance()
+    feature_importance_df = feature_importance_df.sort_values(
+        'importance', ascending=False).reset_index(drop=True)
+    plt.figure(figsize=(8, 16))
+    sns.barplot(data=feature_importance_df, x='importance', y='feature')
+    plt.title('Feature importance (averaged/folds)')
+    plt.tight_layout()
+    plt.show()
+
 
 for groupNum_train in building_meta_df['groupNum_train'].unique():
     X_train, y_train = create_X_y(train_df, groupNum_train=groupNum_train)
@@ -971,6 +1015,9 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
     except:
         pass
 
+    # Feature importance
+    plot_feature_importance(model, X_train.columns)
+
     del X_train, y_train
     gc.collect()
 
@@ -978,7 +1025,7 @@ for groupNum_train in building_meta_df['groupNum_train'].unique():
 
 # %% [code]
 
-# Prediction on test data¶
+# Prediction on test data
 
 print('loading...')
 test_df = pd.read_feather(root/'test.feather')
@@ -1020,6 +1067,13 @@ weather_test_df = reduce_mem_usage(weather_test_df, use_float16=True)
 
 gc.collect()
 
+# %% [code]
+# Save preprocessing test data in pickle format
+test_df.to_pickle('test_df.pkl')
+weather_test_df.to_pickle('weather_test_df.pkl')
+gc.collect()
+
+
 
 # %% [code]
 
@@ -1037,7 +1091,7 @@ def create_X(test_df, groupNum_train):
     target_test_df = test_df[test_df['groupNum_train']
                              == groupNum_train].copy()
     target_test_df = target_test_df.merge(
-        building_meta_df, on=['building_id', 'meter', 'groupNum_train'], how='left')
+        building_meta_df, on=['building_id', 'meter', 'groupNum_train','square_feet'], how='left')
     target_test_df = target_test_df.merge(
         weather_test_df, on=['site_id', 'timestamp'], how='left')
     X_test = target_test_df[feature_cols + category_cols]
@@ -1062,8 +1116,22 @@ def pred_all(X_test, models, batch_size=1000000):
     y_test_pred_total /= len(models)
     return y_test_pred_total
 
+
 def pred(X_test, models, batch_size=1000000):
-    return pred_all(X_test, models, batch_size=1000000)
+    if predmode == 'valid' :
+        print ('valid pred')
+        return pred_valid(X_test, models, batch_size = 1000000)
+    elif predmode == 'train' :
+        print ('train pred')
+        return pred_train(X_test, models, batch_size = 1000000)
+    else:
+        print ('all pred')
+        return pred_all(X_test, models, batch_size = 1000000)
+# %% [code]
+# Check columns of test data
+print('test_df columns: ', test_df.columns)
+print('weather_test_df columns: ', weather_test_df.columns)
+print('Building_meta_df columns: ', building_meta_df.columns)
 
 
 # %% [code]
@@ -1104,7 +1172,7 @@ sample_submission.tail()
 print('Shape of Sample Submission', sample_submission.shape)
 
 # %% [code]
-if not debug:
+if debug:
     sample_submission.to_csv(
         'k_fold_GBM_test_Submission.csv', index=False, float_format='%.4f')
 
@@ -1115,9 +1183,9 @@ np.log1p(sample_submission['meter_reading']).hist(bins=100)
 # %% [code]
 # Submission on kaggle
 ! mkdir -p ~/.kaggle / && \
-    echo '{"username":"joydipbhowmick","key":"8ccf569cd07c20ae28c251793a21c645"}' > ~/.kaggle/kaggle.json && \
-    chmod 600 ~/.kaggle/kaggle.json  # Create a new direcory use the kaggle token key in that and make it read only to current user.
-! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_test_Submission.csv -m "First test Submission 22/23"
+    echo '{"username":"joydipbhowmick","key":"498fb1b8fd7dff10274faf5933b9b60e"}' > ~/.kaggle/kaggle.json && \
+    chmod 600 ~/.kaggle/kaggle.json  # Create a new directory use the kaggle token key in that and make it read only to current user.
+! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_test_Submission.csv -m "2nd test Submission 22/23"
 
 
 
