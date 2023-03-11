@@ -1,32 +1,27 @@
 # %% [code]
-print("Importing libraries...")
-from sklearn.model_selection import StratifiedKFold 
-from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import LabelEncoder
-from scipy.signal import savgol_filter as sg
-import lightgbm as lgb
-
-import holidays
-
-from IPython.core.display import display, HTML
-
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
-import numpy as np  # linear algebra
-from tqdm import tqdm_notebook as tqdm
-
-from pandas.api.types import is_categorical_dtype
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
-
-import os
-import gc
-import sys
-import random
-from pathlib import Path
-
+from sklearn.model_selection import StratifiedKFold
 import warnings
+from pathlib import Path
+import random
+import sys
+import gc
+import os
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas.api.types import is_categorical_dtype
+from tqdm import tqdm_notebook as tqdm
+import numpy as np  # linear algebra
+import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
+import matplotlib.pyplot as plt
+import seaborn as sns
+from IPython.core.display import display, HTML
+import holidays
+import lightgbm as lgb
+from scipy.signal import savgol_filter as sg
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_squared_error
+print("Importing libraries...")
+
+
 warnings.filterwarnings('ignore')
 
 
@@ -39,24 +34,25 @@ outlier = True
 rescale = True
 
 debug = True
+Train = False
 num_rounds = 200
 
-clip0=True
+clip0 = True
 
 folds = 3  # 3, 6, 12
 # 3:
 # 6:
 # 12:
 
-use_ucf=True
-ucf_clip=True
+use_ucf = True
+ucf_clip = True
 
 ucf_year = [2017, 2018]  # ucf data year used in train
 
 predmode = 'all'  # 'valid', 'train', 'all'
 
 zone_dict = {0: 4, 1: 0, 2: 7, 3: 4, 4: 7, 5: 0, 6: 4, 7: 4,
-             8: 4, 9: 5, 10: 7, 11: 4, 12: 0, 13: 5, 14: 4, 15: 4} 
+             8: 4, 9: 5, 10: 7, 11: 4, 12: 0, 13: 5, 14: 4, 15: 4}
 
 # Site Specific Holidays
 en_holidays = holidays.UK()
@@ -113,11 +109,12 @@ def reduce_mem_usage(df, use_float16=False):
 
     return df
 
+
 def set_local(df):
     for sid, zone in zone_dict.items():
         sids = df.site_id == sid
         df.loc[sids, 'timestamp'] = df[sids].timestamp - pd.offsets.Hour(zone)
-    
+
 
 def add_holiyday(df_weather):
     en_idx = df_weather.query('site_id == 1 or site_id == 5').index
@@ -140,6 +137,7 @@ def add_holiyday(df_weather):
     df_weather.loc[holiday_idx, 'IsHoliday'] = 1
     df_weather['IsHoliday'] = df_weather['IsHoliday'].astype(np.uint8)
 
+
 def preprocess(df):
     df["hour"] = df["timestamp"].dt.hour
     df["day"] = df["timestamp"].dt.day
@@ -148,6 +146,7 @@ def preprocess(df):
     df["dayofweek"] = df["timestamp"].dt.dayofweek
 
 # Adding some lag feature
+
 
 def add_lag_feature(weather_df, window=3):
     group_df = weather_df.groupby('site_id')
@@ -166,6 +165,7 @@ def add_lag_feature(weather_df, window=3):
 
 # SG Filter for Weather
 
+
 def add_sg(df):
     w = 11
     p = 2
@@ -181,13 +181,11 @@ def add_sg(df):
         df.loc[index, 'dew_diff2'] = sg(df[index].dew_temperature, w, p, 2)
 
 
-
-
-
 # %% [code]
 print("Importing data...")
 
-root = Path('/workspace/CMT307-Coursework-2-Group-19/all-code') # Change the path to the source file path, use Memory_Management.py to generate files in feather format 
+# Change the path to the source file path, use Memory_Management.py to generate files in feather format
+root = Path('/workspace/Ashrae-Energy-Prediction-III-21-22/src/data')
 train_df = pd.read_feather(root/'train.feather')
 weather_train_df = pd.read_feather(root/'weather_train.feather')
 building_meta_df = pd.read_feather(root/'building_metadata.feather')
@@ -202,22 +200,22 @@ building_meta_df = building_meta_df.merge(
 print("Adding features...")
 # Set group  (site-meter) for training models
 building_meta_df['groupNum_train'] = building_meta_df['site_id'].astype(
-    'int')*10 + building_meta_df['meter'].astype('int') # Add group number
+    'int')*10 + building_meta_df['meter'].astype('int')  # Add group number
 
 building_meta_df['floor_area'] = building_meta_df.square_feet / \
-    building_meta_df.floor_count # Add floor area
+    building_meta_df.floor_count  # Add floor area
 
 
-set_local(weather_train_df) # Set local time
+set_local(weather_train_df)  # Set local time
 
-add_holiyday(weather_train_df) # Add holiday
+add_holiyday(weather_train_df)  # Add holiday
 
 # %% [code]
 print('Shape of Train Data:', train_df.shape)
 print('Shape of Building Data:', building_meta_df.shape)
 print('Shape of Weather Train Data:', weather_train_df.shape)
 
- 
+
 # %% [Markdown]
 # ## Data Cleaning
 
@@ -361,8 +359,8 @@ train_df = train_df.query(
 train_df = train_df.query(
     'not (building_id == 1322 & meter == 0 & timestamp > "2016-09-28 07" & timestamp < "2016-10-20 13")')
 
-# %% [Markdown] 
-    # ## Remove outliers
+# %% [Markdown]
+# ## Remove outliers
 
 # %% [code] {"scrolled":true}
 train_df = train_df.query(
@@ -633,7 +631,7 @@ train_df = train_df.query(
 
 train_df = train_df.reset_index()
 
-print('after', len(train_df)) 
+print('after', len(train_df))
 
 gc.collect()
 
@@ -645,7 +643,7 @@ site_0_bids = building_meta_df[building_meta_df.site_id ==
                                0].building_id.unique()
 
 print(len(site_0_bids), len(
-    train_df[train_df.building_id.isin(site_0_bids)].building_id.unique())) 
+    train_df[train_df.building_id.isin(site_0_bids)].building_id.unique()))
 print("Before correction:")
 train_df[train_df.building_id.isin(
     site_0_bids) & (train_df.meter == 0)].head(10)
@@ -667,34 +665,34 @@ print("Log transform of meter_reading...")
 train_df['meter_reading_log1p'] = np.log1p(train_df['meter_reading'])
 
 # %% [Markdown]
-## Add time feature
+# Add time feature
 
 """Some features introduced in https://www.kaggle.com/ryches/simple-lgbm-solution by @ryches
 Features that are likely predictive:"""
 
-#Buildings:-
+# Buildings:-
 
-#primary_use,
-#square_feet,
-#year_built,
-#floor_count (may be too sparse to use),
-#Weather,
+# primary_use,
+# square_feet,
+# year_built,
+# floor_count (may be too sparse to use),
+# Weather,
 
-#time of day :-
-#holiday,
-#weekend,
-#cloud_coverage + lags,
-#dew_temperature + lags,
-#precip_depth + lags,
-#sea_level_pressure + lags,
-#wind_direction + lags,
-#wind_speed + lags,
+# time of day :-
+# holiday,
+# weekend,
+# cloud_coverage + lags,
+# dew_temperature + lags,
+# precip_depth + lags,
+# sea_level_pressure + lags,
+# wind_direction + lags,
+# wind_speed + lags,
 
-#Train:-
+# Train:-
 
-#max, mean, min, std of the specific building historically,
-#number of meters,
-#number of buildings at a siteid.
+# max, mean, min, std of the specific building historically,
+# number of meters,
+# number of buildings at a siteid.
 
 # %% [code]
 # Preprocessing time features
@@ -737,12 +735,12 @@ print("After interpolation:")
 weather_train_df.groupby('site_id').apply(lambda group: group.isna().sum())
 
 # %% [code]
-# Checking how many data points in each site_id 
+# Checking how many data points in each site_id
 print("Checking how many data points in each site_id...")
 weather_train_df.groupby('site_id').apply(lambda group: group.shape)
 
 # %% [code]
-print(  
+print(
     "Add lag features for weather data...")
 add_lag_feature(weather_train_df, window=3)
 add_lag_feature(weather_train_df, window=72)
@@ -805,9 +803,9 @@ category_cols = ['building_id', 'site_id', 'primary_use',
                  'IsHoliday', 'groupNum_train']  # , 'meter'
 feature_cols = ['square_feet_np_log1p', 'year_built'] + [
     'hour', 'weekend',
-        'day',  'month' ,
-        'dayofweek',
-        'square_feet'
+    'day',  'month',
+    'dayofweek',
+    'square_feet'
 ] + [
     'air_temperature', 'cloud_coverage',
     'dew_temperature', 'precip_depth_1_hr',
@@ -832,7 +830,7 @@ feature_cols = ['square_feet_np_log1p', 'year_built'] + [
     'dew_smooth', 'air_smooth',
     'dew_diff', 'air_diff',
     'dew_diff2', 'air_diff2'
- ] 
+]
 
 # %% [code]
 # Colums in train_df
@@ -859,31 +857,30 @@ train_df['square_feet_np_log1p'] = np.log1p(train_df['square_feet'])
 
 # %% [code]
 train_df = reduce_mem_usage(train_df, use_float16=True)
-gc.collect() # Copy till here for data preprocessing.
+gc.collect()  # Copy till here for data preprocessing.
 
 # %% [code]
 # Delete unnecessary dataframes to free up memory
-#del building_meta_df
+# del building_meta_df
 del weather_train_df
 gc.collect()
 
 # %% [code]
 # Save preprocessed data
-train_df.to_pickle('train_df.pkl')
-
+print("Saving preprocessed train data...")
+train_df.to_pickle('data/train_df.pkl')
 
 
 # %% [code]
-### Model Implementation and Training
+# Model Implementation and Training
 
 # %% [code]
 # Create X_train and y_train
-
 def create_X_y(train_df, groupNum_train):
 
     target_train_df = train_df[train_df['groupNum_train']
                                == groupNum_train].copy()
-    
+
     X_train = target_train_df[feature_cols + category_cols]
     y_train = target_train_df['meter_reading_log1p'].values
 
@@ -893,6 +890,7 @@ def create_X_y(train_df, groupNum_train):
 # %% [code]
 
 # Define modelling parameters and training model
+
 
 def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds=1500, lr=0.1, bf=0.1):
     """Train Light GBM model"""
@@ -952,13 +950,15 @@ def fit_lgbm(train, val, devices=(-1,), seed=None, cat_features=None, num_rounds
 # %% [code]
 # Stratified K-flod Cross Validation with shuffling
 seed = 21099797
-shuffle = True # Try with shuffling as well and check accuracy
+shuffle = True  # Try with shuffling as well and check accuracy
 kf = StratifiedKFold(n_splits=folds)
 
 # %% [markdown]
 # Train model by each group # (site-meter)
 
 # %% [code]
+
+
 def plot_feature_importance(model, feature_cols):
     """Plot feature importance"""
     feature_importance_df = pd.DataFrame()
@@ -973,59 +973,61 @@ def plot_feature_importance(model, feature_cols):
     plt.show()
 
 
-for groupNum_train in building_meta_df['groupNum_train'].unique():
-    X_train, y_train = create_X_y(train_df, groupNum_train=groupNum_train)
-    y_valid_pred_total = np.zeros(X_train.shape[0])
+if Train:
+    for groupNum_train in building_meta_df['groupNum_train'].unique():
+        X_train, y_train = create_X_y(train_df, groupNum_train=groupNum_train)
+        y_valid_pred_total = np.zeros(X_train.shape[0])
 
-    gc.collect()
-    print('groupNum_train', groupNum_train, X_train.shape)
-
-    cat_features = [X_train.columns.get_loc(
-        cat_col) for cat_col in category_cols]
-    print('cat_features', cat_features)
-
-    exec('models' + str(groupNum_train) + '=[]')
-
-    train_df_site = train_df[train_df['groupNum_train']
-                             == groupNum_train].copy()
-
-    
-    for train_idx, valid_idx in kf.split(train_df_site, train_df_site['building_id']):
-        train_data = X_train.iloc[train_idx, :], y_train[train_idx]
-        valid_data = X_train.iloc[valid_idx, :], y_train[valid_idx]
-
-        mindex = train_df_site.iloc[valid_idx, :].month.unique()
-        print(mindex)
-
-        print('train', len(train_idx), 'valid', len(valid_idx))
-    
-        model, y_pred_valid, log = fit_lgbm(train_data, valid_data, cat_features=category_cols,
-                                            num_rounds=num_rounds, lr=0.05, bf=0.7)
-        y_valid_pred_total[valid_idx] = y_pred_valid
-    
-        exec('models' + str(groupNum_train) + '.append([mindex, model])')
         gc.collect()
-        if debug:
-            break
+        print('groupNum_train', groupNum_train, X_train.shape)
 
-    try:
-        sns.distplot(y_train)
-        sns.distplot(y_valid_pred_total)
-        plt.show()
-    except:
-        pass
+        cat_features = [X_train.columns.get_loc(
+            cat_col) for cat_col in category_cols]
+        print('cat_features', cat_features)
 
-    # Feature importance
-    plot_feature_importance(model, X_train.columns)
+        exec('models' + str(groupNum_train) + '=[]')
 
-    del X_train, y_train
-    gc.collect()
+        train_df_site = train_df[train_df['groupNum_train']
+                                 == groupNum_train].copy()
 
-    print('-------------------------------------------------------------')
+        for train_idx, valid_idx in kf.split(train_df_site, train_df_site['building_id']):
+            train_data = X_train.iloc[train_idx, :], y_train[train_idx]
+            valid_data = X_train.iloc[valid_idx, :], y_train[valid_idx]
+
+            mindex = train_df_site.iloc[valid_idx, :].month.unique()
+            print(mindex)
+
+            print('train', len(train_idx), 'valid', len(valid_idx))
+
+            model, y_pred_valid, log = fit_lgbm(train_data, valid_data, cat_features=category_cols,
+                                                num_rounds=num_rounds, lr=0.05, bf=0.7)
+            y_valid_pred_total[valid_idx] = y_pred_valid
+
+            exec('models' + str(groupNum_train) + '.append([mindex, model])')
+            gc.collect()
+            if debug:
+                break
+
+        try:
+            sns.distplot(y_train)
+            sns.distplot(y_valid_pred_total)
+            plt.show()
+        except:
+            pass
+
+        # Feature importance
+        plot_feature_importance(model, X_train.columns)
+
+        del X_train, y_train
+        gc.collect()
+
+        print('-------------------------------------------------------------')
 
 # %% [code]
 
-# Prediction on test data
+# Preprocessing on test data
+
+print("Preprocessing test data...")
 
 print('loading...')
 test_df = pd.read_feather(root/'test.feather')
@@ -1056,7 +1058,7 @@ add_lag_feature(weather_test_df, window=72)
 
 test_df['bid_cnt'] = test_df.building_id.map(bid_map)
 
-test_df = test_df.merge(building_meta_df[['building_id', 'meter', 'groupNum_train','square_feet']], on=[
+test_df = test_df.merge(building_meta_df[['building_id', 'meter', 'groupNum_train', 'square_feet']], on=[
                         'building_id', 'meter'], how='left')
 
 test_df['square_feet_np_log1p'] = np.log1p(test_df['square_feet'])
@@ -1069,29 +1071,31 @@ gc.collect()
 
 # %% [code]
 # Save preprocessing test data in pickle format
-test_df.to_pickle('test_df.pkl')
-weather_test_df.to_pickle('weather_test_df.pkl')
+print("Saving test data...")
+test_df.to_pickle('data/test_df.pkl')
+weather_test_df.to_pickle('data/weather_test_df.pkl')
 gc.collect()
 
 
-
 # %% [code]
 
-sample_submission = pd.read_feather(
-    os.path.join(root, 'sample_submission.feather'))
-reduce_mem_usage(sample_submission)
+if not debug:
+    sample_submission = pd.read_feather(
+        os.path.join(root, 'sample_submission.feather'))
+    reduce_mem_usage(sample_submission)
 
-print(sample_submission.shape)
+    print(sample_submission.shape)
 
 # %% [code]
 # Create X_test and y_test
+
 
 def create_X(test_df, groupNum_train):
 
     target_test_df = test_df[test_df['groupNum_train']
                              == groupNum_train].copy()
     target_test_df = target_test_df.merge(
-        building_meta_df, on=['building_id', 'meter', 'groupNum_train','square_feet'], how='left')
+        building_meta_df, on=['building_id', 'meter', 'groupNum_train', 'square_feet'], how='left')
     target_test_df = target_test_df.merge(
         weather_test_df, on=['site_id', 'timestamp'], how='left')
     X_test = target_test_df[feature_cols + category_cols]
@@ -1099,7 +1103,8 @@ def create_X(test_df, groupNum_train):
     return X_test
 
 # %% [code]
-## Run a loop to merge data groupNum_train wise and define model prediction.
+# Run a loop to merge data groupNum_train wise and define model prediction.
+
 
 def pred_all(X_test, models, batch_size=1000000):
     iterations = (X_test.shape[0] + batch_size - 1) // batch_size
@@ -1118,15 +1123,17 @@ def pred_all(X_test, models, batch_size=1000000):
 
 
 def pred(X_test, models, batch_size=1000000):
-    if predmode == 'valid' :
-        print ('valid pred')
-        return pred_valid(X_test, models, batch_size = 1000000)
-    elif predmode == 'train' :
-        print ('train pred')
-        return pred_train(X_test, models, batch_size = 1000000)
+    if predmode == 'valid':
+        print('valid pred')
+        return pred_valid(X_test, models, batch_size=1000000)
+    elif predmode == 'train':
+        print('train pred')
+        return pred_train(X_test, models, batch_size=1000000)
     else:
-        print ('all pred')
-        return pred_all(X_test, models, batch_size = 1000000)
+        print('all pred')
+        return pred_all(X_test, models, batch_size=1000000)
+
+
 # %% [code]
 # Check columns of test data
 print('test_df columns: ', test_df.columns)
@@ -1136,57 +1143,50 @@ print('Building_meta_df columns: ', building_meta_df.columns)
 
 # %% [code]
 # Call Model prediction
-for groupNum_train in building_meta_df['groupNum_train'].unique():
-    print('groupNum_train: ', groupNum_train)
-    X_test = create_X(test_df, groupNum_train=groupNum_train)
-    gc.collect()
+if Train:
+    for groupNum_train in building_meta_df['groupNum_train'].unique():
+        print('groupNum_train: ', groupNum_train)
+        X_test = create_X(test_df, groupNum_train=groupNum_train)
+        gc.collect()
 
-    exec('y_test= pred(X_test, models' + str(groupNum_train) + ')')
+        exec('y_test= pred(X_test, models' + str(groupNum_train) + ')')
 
-    sns.distplot(y_test)
-    plt.show()
+        sns.distplot(y_test)
+        plt.show()
 
-    print(X_test.shape, y_test.shape)
-    sample_submission.loc[test_df["groupNum_train"] ==
-                          groupNum_train, "meter_reading"] = np.expm1(y_test)
+        print(X_test.shape, y_test.shape)
+        sample_submission.loc[test_df["groupNum_train"] ==
+                              groupNum_train, "meter_reading"] = np.expm1(y_test)
 
-    del X_test, y_test
-    gc.collect()
+        del X_test, y_test
+        gc.collect()
 
-# %% [markdown]
-# site-0 correction
+if not debug:
+    # %% [markdown]
+    # site-0 correction
+
+    # %% [code]
+    # https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
+    sample_submission.loc[(test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0), 'meter_reading'] = sample_submission[(
+        test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0)]['meter_reading'] * 3.4118
+
+    # %% [code]
+    sample_submission.head()
+
+    # %% [code]
+    sample_submission.tail()
+
+    # %% [code]
+    print('Shape of Sample Submission', sample_submission.shape)
 
 # %% [code]
-# https://www.kaggle.com/c/ashrae-energy-prediction/discussion/119261#latest-684102
-sample_submission.loc[(test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0), 'meter_reading'] = sample_submission[(
-    test_df.building_id.isin(site_0_bids)) & (test_df.meter == 0)]['meter_reading'] * 3.4118
-
-
-# %% [code]
-sample_submission.head()
-
-# %% [code]
-sample_submission.tail()
-
-# %% [code]
-print('Shape of Sample Submission', sample_submission.shape)
-
-# %% [code]
-if debug:
+if not debug:
     sample_submission.to_csv(
         'k_fold_GBM_test_Submission.csv', index=False, float_format='%.4f')
 
 # %% [code]
-# Histogram of submission file. 
-np.log1p(sample_submission['meter_reading']).hist(bins=100)
+# Histogram of submission file.
+if not debug:
+    np.log1p(sample_submission['meter_reading']).hist(bins=100)
 
-# %% [code]
-# Submission on kaggle
-! mkdir -p ~/.kaggle / && \
-    echo '{"username":"joydipbhowmick","key":"498fb1b8fd7dff10274faf5933b9b60e"}' > ~/.kaggle/kaggle.json && \
-    chmod 600 ~/.kaggle/kaggle.json  # Create a new directory use the kaggle token key in that and make it read only to current user.
-! kaggle competitions submit -c ashrae-energy-prediction -f k_fold_GBM_test_Submission.csv -m "2nd test Submission 22/23"
-
-
-
-# %%
+print("Script completed...")
