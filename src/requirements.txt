@@ -18,7 +18,7 @@ pandas==1.5.3
 Pillow==10.1.0
 pyarrow==11.0.0
 PyMeeus==0.5.12
-pyparsing==3.0.9
+pyparsing==3.1.1
 python-slugify==8.0.1
 pytz==2023.3
 scikit-learn==1.2.2
