@@ -16,7 +16,7 @@ matplotlib==3.7.1
 numpy==1.26.1
 pandas==1.5.3
 Pillow==10.1.0
-pyarrow==11.0.0
+pyarrow==14.0.1
 PyMeeus==0.5.12
 pyparsing==3.0.9
 python-slugify==8.0.1
