@@ -20,7 +20,7 @@ pyarrow==14.0.1
 PyMeeus==0.5.12
 pyparsing==3.1.1
 python-slugify==8.0.1
-pytz==2023.3
+pytz==2023.3.post1
 scikit-learn==1.2.2
 scipy==1.10.1
 seaborn==0.13.0
