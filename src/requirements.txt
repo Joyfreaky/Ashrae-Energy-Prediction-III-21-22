@@ -1,6 +1,6 @@
 contourpy==1.2.0
 convertdate==2.4.0
-cycler==0.11.0
+cycler==0.12.1
 fonttools==4.44.0
 hijri-converter==2.2.4
 holidays==0.21.13
